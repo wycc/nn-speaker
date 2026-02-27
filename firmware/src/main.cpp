@@ -80,6 +80,7 @@ i2s_pin_config_t i2s_speaker_pins = {
 
 static Preferences g_wifiPrefs;
 static String g_uartInputLine;
+static IndicatorLight *g_indicatorLight = nullptr;
 
 static String trimCopy(const String &in)
 {
@@ -184,9 +185,60 @@ static void processWifiUartCommand(const String &line)
   Serial.println("Unknown command. Type WIFI HELP");
 }
 
+static void processLedUartCommand(const String &line)
+{
+  String command = trimCopy(line);
+  if (command.length() == 0)
+  {
+    return;
+  }
+
+  if (g_indicatorLight == nullptr)
+  {
+    Serial.println("LED controller is not ready.");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("LED HELP"))
+  {
+    Serial.println("UART LED commands:");
+    Serial.println("  LED ON");
+    Serial.println("  LED OFF");
+    Serial.println("  LED PULSE");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("LED ON"))
+  {
+    g_indicatorLight->setState(ON);
+    Serial.println("LED set to ON.");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("LED OFF"))
+  {
+    g_indicatorLight->setState(OFF);
+    Serial.println("LED set to OFF.");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("LED PULSE"))
+  {
+    g_indicatorLight->setState(PULSING);
+    Serial.println("LED set to PULSING.");
+    return;
+  }
+}
+
 static void handleUartWifiProvisioning(const String &line)
 {
-  processWifiUartCommand(line);
+  String command = trimCopy(line);
+  if (command.startsWith("LED ") || command.equalsIgnoreCase("LED HELP"))
+  {
+    processLedUartCommand(command);
+    return;
+  }
+  processWifiUartCommand(command);
 }
 
 void es8388_init(void)
@@ -223,6 +275,7 @@ void setup()
   delay(1000);
   Serial.println("Starting up");
   Serial.println("UART WiFi provisioning enabled. Type WIFI HELP and press Enter.");
+  Serial.println("UART LED control enabled. Type LED HELP and press Enter.");
 
 #ifdef BOARD_HAS_PSRAM
   // Prefer external RAM for generic malloc to keep internal RAM for TLS handshake.
@@ -274,6 +327,7 @@ void setup()
 
   // indicator light to show when we are listening
   IndicatorLight *indicator_light = new IndicatorLight();
+  g_indicatorLight = indicator_light;
 
   // and the intent processor
   IntentProcessor *intent_processor = new IntentProcessor(speaker);
