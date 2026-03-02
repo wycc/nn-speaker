@@ -25,3 +25,6 @@
 // command recognition settings
 //#define COMMAND_RECOGNITION_ACCESS_KEY "P5QMUSMFV6IRRSTABXFQ7UIXPFRMC4L5"
 #define COMMAND_RECOGNITION_ACCESS_KEY "N6HHFVXOVIZFCLAPEMC7LPDZ4KXONLSJ"
+
+// Infer diagnostics: set to 1 to enable ASCII dump of 99x43 input spectrum before each NN inference.
+#define INFER_DIAG 0

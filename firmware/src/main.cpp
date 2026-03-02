@@ -252,6 +252,16 @@ void es8388_init(void)
     kit.setVolume(100);
 }
 
+// Sound task to play the detected wake word sound
+void soundTask(void *param)
+{
+  Speaker *speaker = static_cast<Speaker *>(param);
+  while (true)  {
+    speaker->playReady();
+    vTaskDelay(2000 / portTICK_PERIOD_MS);
+  }
+}
+
 // This task does all the heavy lifting for our application
 void applicationTask(void *param)
 {
@@ -343,6 +353,8 @@ void setup()
   // set up the i2s sample writer task
   TaskHandle_t applicationTaskHandle;
   xTaskCreate(applicationTask, "Application Task", 4096, application, 1, &applicationTaskHandle);
+  TaskHandle_t soundTaskHandle;
+  //xTaskCreate(soundTask, "Sound Task", 4096, speaker, 1, &soundTaskHandle);
 
   // start sampling from i2s device - use I2S_NUM_0 as that's the one that supports the internal ADC
 #ifdef USE_I2S_MIC_INPUT

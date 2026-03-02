@@ -1,6 +1,8 @@
 #ifndef _detect_wake_word_state_h_
 #define _detect_wake_word_state_h_
 
+#include <stdint.h>
+#include "config.h"
 #include "States.h"
 
 class I2SSampler;
@@ -14,8 +16,12 @@ private:
     NeuralNetwork *m_nn;
     AudioProcessor *m_audio_processor;
     float m_average_detect_time;
+    float m_average_encode_time;
     int m_number_of_detections;
     int m_number_of_runs;
+#if INFER_DIAG
+    uint32_t m_infer_index;
+#endif
 
 public:
     DetectWakeWordState(I2SSampler *sample_provider);

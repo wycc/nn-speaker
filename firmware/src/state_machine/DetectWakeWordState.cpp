@@ -4,11 +4,79 @@
 #include "NeuralNetwork.h"
 #include "RingBuffer.h"
 #include "DetectWakeWordState.h"
+#include "config.h"
 
 #define WINDOW_SIZE 320
 #define STEP_SIZE 160
 #define POOLING_SIZE 6
 #define AUDIO_LENGTH 16000
+
+#if INFER_DIAG
+namespace
+{
+const int kInferDiagRows = 99;
+const int kInferDiagCols = 43;
+const char kAsciiLevels[] = " .:-=+*#%@";
+
+void dumpSpectrumAscii(const float *spectrum, uint32_t infer_index, uint32_t timestamp_ms)
+{
+    if (!spectrum)
+    {
+        return;
+    }
+
+    const int total = kInferDiagRows * kInferDiagCols;
+    float min_value = spectrum[0];
+    float max_value = spectrum[0];
+
+    for (int i = 1; i < total; ++i)
+    {
+        const float v = spectrum[i];
+        if (v < min_value)
+        {
+            min_value = v;
+        }
+        if (v > max_value)
+        {
+            max_value = v;
+        }
+    }
+
+    const int level_count = sizeof(kAsciiLevels) - 1;
+    const float range = max_value - min_value;
+    const float inv_range = (range > 1e-12f) ? (1.0f / range) : 0.0f;
+
+    Serial.printf("[INFER_DIAG] spectrum dump begin idx=%u ts=%ums min=%.6f max=%.6f\n",
+                  infer_index, timestamp_ms, min_value, max_value);
+
+    char line[kInferDiagCols + 1];
+    line[kInferDiagCols] = '\0';
+
+    for (int r = 0; r < kInferDiagRows; ++r)
+    {
+        const int row_base = r * kInferDiagCols;
+        for (int c = 0; c < kInferDiagCols; ++c)
+        {
+            const float v = spectrum[row_base + c];
+            const float normalized = (range > 1e-12f) ? ((v - min_value) * inv_range) : 0.0f;
+            int idx = static_cast<int>(normalized * (level_count - 1));
+            if (idx < 0)
+            {
+                idx = 0;
+            }
+            if (idx >= level_count)
+            {
+                idx = level_count - 1;
+            }
+            line[c] = kAsciiLevels[idx];
+        }
+        Serial.println(line);
+    }
+
+    Serial.println("[INFER_DIAG] spectrum dump end ----------------------------------------");
+}
+} // namespace
+#endif
 
 DetectWakeWordState::DetectWakeWordState(I2SSampler *sample_provider)
 {
@@ -16,9 +84,14 @@ DetectWakeWordState::DetectWakeWordState(I2SSampler *sample_provider)
     m_sample_provider = sample_provider;
     // some stats on performance
     m_average_detect_time = 0;
+    m_average_encode_time = 0;
+
     m_number_of_runs = 0;
     m_nn = NULL;
     m_audio_processor = NULL;
+#if INFER_DIAG
+    m_infer_index = 0;
+#endif
 }
 void DetectWakeWordState::enterState()
 {
@@ -50,11 +123,18 @@ bool DetectWakeWordState::run()
     float *input_buffer = m_nn->getInputBuffer();
     // process the samples to get the spectrogram
     m_audio_processor->get_spectrogram(reader, input_buffer);
+#if INFER_DIAG
+    dumpSpectrumAscii(input_buffer, m_infer_index, millis());
+    ++m_infer_index;
+#endif
     // finished with the sample reader
+    long end = millis();
+    m_average_encode_time = (end - start) * 0.1 + m_average_encode_time * 0.9;
+    start = end;
     delete reader;
     // get the prediction for the spectrogram
     float output = m_nn->predict();
-    long end = millis();
+    end = millis();
     // compute the stats
     m_average_detect_time = (end - start) * 0.1 + m_average_detect_time * 0.9;
     m_number_of_runs++;
@@ -62,7 +142,7 @@ bool DetectWakeWordState::run()
     if (m_number_of_runs == 100)
     {
         m_number_of_runs = 0;
-        Serial.printf("Average detection time %.fms\n", m_average_detect_time);
+        Serial.printf("Average detection time %.fms %.fms\n", m_average_detect_time,m_average_encode_time);
     }
     // use quite a high threshold to prevent false positives
     if (output > 0.95)
