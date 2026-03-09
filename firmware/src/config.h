@@ -1,6 +1,6 @@
 // WiFi credentials
-#define WIFI_SSID "hsc48"
-#define WIFI_PSWD "04124572"
+#define WIFI_SSID "hsap"
+#define WIFI_PSWD "28829705"
 
 // are you using an I2S microphone - comment this out if you want to use an analog mic and ADC input
 #define USE_I2S_MIC_INPUT
