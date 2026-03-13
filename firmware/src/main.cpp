@@ -82,6 +82,18 @@ static Preferences g_wifiPrefs;
 static String g_uartInputLine;
 static IndicatorLight *g_indicatorLight = nullptr;
 
+void SoundTask(void *param)
+{
+  Speaker *speaker = static_cast<Speaker *>(param);
+  const TickType_t xSoundInterval = pdMS_TO_TICKS(2000);
+
+  while (true)
+  {
+    speaker->playOK();
+    vTaskDelay(xSoundInterval);
+  }
+}
+
 static String trimCopy(const String &in)
 {
   String out = in;
@@ -343,6 +355,9 @@ void setup()
   // set up the i2s sample writer task
   TaskHandle_t applicationTaskHandle;
   xTaskCreate(applicationTask, "Application Task", 4096, application, 1, &applicationTaskHandle);
+
+  // periodic sound task
+  xTaskCreate(SoundTask, "SoundTask", 4096, speaker, 1, nullptr);
 
   // start sampling from i2s device - use I2S_NUM_0 as that's the one that supports the internal ADC
 #ifdef USE_I2S_MIC_INPUT
