@@ -13,6 +13,7 @@
 #include "IntentProcessor.h"
 #include "Speaker.h"
 #include "IndicatorLight.h"
+#include "TouchKeyReader.h"
 #include "AudioKitHAL.h"
 
 // i2s config for using the internal ADC
@@ -81,6 +82,7 @@ i2s_pin_config_t i2s_speaker_pins = {
 static Preferences g_wifiPrefs;
 static String g_uartInputLine;
 static IndicatorLight *g_indicatorLight = nullptr;
+static TouchKeyReader *g_touchKeyReader = nullptr;
 
 static String trimCopy(const String &in)
 {
@@ -230,9 +232,92 @@ static void processLedUartCommand(const String &line)
   }
 }
 
+static void processUart2Command(const String &line)
+{
+  String command = trimCopy(line);
+  if (command.length() == 0)
+  {
+    return;
+  }
+
+  if (command.equalsIgnoreCase("UART2 HELP"))
+  {
+    Serial.println("UART2 commands:");
+    Serial.println("  UART2 SEND <text>");
+    return;
+  }
+
+  if (command.startsWith("UART2 SEND "))
+  {
+    String payload = command.substring(strlen("UART2 SEND "));
+    if (payload.length() == 0)
+    {
+      Serial.println("UART2 payload cannot be empty.");
+      return;
+    }
+
+    uart2_send(const_cast<char *>(payload.c_str()));
+    Serial.printf("UART2 sent: %s\n", payload.c_str());
+
+    String response;
+    unsigned long start = millis();
+    while (millis() - start < 500)
+    {
+      while (Serial2.available() > 0)
+      {
+        char ch = static_cast<char>(Serial2.read());
+        if (ch == '\r' || ch == '\n')
+        {
+          continue;
+        }
+        response += ch;
+      }
+
+      if (response.length() > 0)
+      {
+        break;
+      }
+      delay(5);
+    }
+
+    if (response.length() == 0)
+    {
+      Serial.println("UART2 response timeout.");
+      return;
+    }
+
+    Serial.printf("UART2 resp: %s\n", response.c_str());
+    if (response.indexOf("{c101ff}") >= 0)
+    {
+      Serial.println("UART2 result: 輸入不完全。");
+    }
+    else if (response.indexOf("{c101fe}") >= 0)
+    {
+      Serial.println("UART2 result: 輸入參數有錯。");
+    }
+    else if (response.indexOf("{c10100}") >= 0)
+    {
+      Serial.println("UART2 result: 指令成功。");
+    }
+    else
+    {
+      Serial.println("UART2 result: 未知回應碼。");
+    }
+    return;
+  }
+
+  Serial.println("Unknown command. Type UART2 HELP");
+}
+
 static void handleUartWifiProvisioning(const String &line)
 {
   String command = trimCopy(line);
+  if (command.startsWith("UART2 ") || command.equalsIgnoreCase("UART2 HELP"))
+  {
+    processUart2Command(command);
+    return;
+  }
+
   if (command.startsWith("LED ") || command.equalsIgnoreCase("LED HELP"))
   {
     processLedUartCommand(command);
@@ -276,6 +361,7 @@ void setup()
   Serial.println("Starting up");
   Serial.println("UART WiFi provisioning enabled. Type WIFI HELP and press Enter.");
   Serial.println("UART LED control enabled. Type LED HELP and press Enter.");
+  Serial.println("UART2 forwarding enabled. Type UART2 HELP and press Enter.");
 
 #ifdef BOARD_HAS_PSRAM
   // Prefer external RAM for generic malloc to keep internal RAM for TLS handshake.
@@ -339,6 +425,17 @@ void setup()
 
   // create our application
   Application *application = new Application(i2s_sampler, intent_processor, speaker, indicator_light);
+
+  // touch key reader (BS8112)
+  g_touchKeyReader = new TouchKeyReader(
+      speaker,
+      TOUCH_I2C_PORT,
+      TOUCH_I2C_SDA,
+      TOUCH_I2C_SCL);
+  if (!g_touchKeyReader->begin())
+  {
+    Serial.println("Touch key reader start failed.");
+  }
 
   // set up the i2s sample writer task
   TaskHandle_t applicationTaskHandle;
