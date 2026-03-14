@@ -1,6 +1,8 @@
 #ifndef _indicator_light_h_
 #define _indicator_light_h_
 
+void uart2_send(char *buf);
+
 enum IndicatorState
 {
     OFF,
