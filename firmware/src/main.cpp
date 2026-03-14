@@ -82,6 +82,23 @@ static Preferences g_wifiPrefs;
 static String g_uartInputLine;
 static IndicatorLight *g_indicatorLight = nullptr;
 
+static void printMemoryStatsAtStartup()
+{
+  Serial.println("=== Memory Stats (Startup) ===");
+  Serial.printf("Heap total: %u\n", ESP.getHeapSize());
+  Serial.printf("Heap free: %u\n", ESP.getFreeHeap());
+  Serial.printf("PSRAM total: %u\n", ESP.getPsramSize());
+  Serial.printf("PSRAM free: %u\n", ESP.getFreePsram());
+  Serial.printf("Internal heap total: %u\n", heap_caps_get_total_size(MALLOC_CAP_INTERNAL));
+  Serial.printf("Internal heap free: %u\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+  Serial.printf("Internal largest block: %u\n", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+  Serial.printf("8-bit capable heap total: %u\n", heap_caps_get_total_size(MALLOC_CAP_8BIT));
+  Serial.printf("8-bit capable heap free: %u\n", heap_caps_get_free_size(MALLOC_CAP_8BIT));
+  Serial.printf("SPIRAM heap total: %u\n", heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
+  Serial.printf("SPIRAM heap free: %u\n", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+  Serial.println("==============================");
+}
+
 static String trimCopy(const String &in)
 {
   String out = in;
@@ -274,6 +291,7 @@ void setup()
   Serial.begin(115200);
   delay(1000);
   Serial.println("Starting up");
+  printMemoryStatsAtStartup();
   Serial.println("UART WiFi provisioning enabled. Type WIFI HELP and press Enter.");
   Serial.println("UART LED control enabled. Type LED HELP and press Enter.");
 
@@ -297,12 +315,6 @@ void setup()
     delay(5000);
     //ESP.restart();
   }
-  Serial.printf("Total heap: %d\n", ESP.getHeapSize());
-  Serial.printf("Free heap: %d\n", ESP.getFreeHeap());
-  Serial.printf("Total PSRAM: %d\n", ESP.getPsramSize());
-  Serial.printf("Free PSRAM: %d\n", ESP.getFreePsram());
-  Serial.printf("Internal heap free: %u\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-  Serial.printf("Internal heap largest block: %u\n", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
   Serial.printf("Chip model: %s\n", ESP.getChipModel());
 
   // startup SPIFFS for the wav files
