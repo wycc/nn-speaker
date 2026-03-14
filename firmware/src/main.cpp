@@ -81,6 +81,9 @@ i2s_pin_config_t i2s_speaker_pins = {
 static Preferences g_wifiPrefs;
 static String g_uartInputLine;
 static IndicatorLight *g_indicatorLight = nullptr;
+static void *g_memTestPtr = nullptr;
+static uint32_t g_memTestSize = 0;
+static uint32_t g_memTestCaps = 0;
 
 static void printMemoryStatsAtStartup()
 {
@@ -97,6 +100,176 @@ static void printMemoryStatsAtStartup()
   Serial.printf("SPIRAM heap total: %u\n", heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
   Serial.printf("SPIRAM heap free: %u\n", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
   Serial.println("==============================");
+}
+
+static bool resolveMemoryCaps(const String &regionName, uint32_t &caps)
+{
+  String region = regionName;
+  region.trim();
+  region.toUpperCase();
+
+  if (region.equals("DEFAULT") || region.equals("HEAP"))
+  {
+    caps = MALLOC_CAP_DEFAULT;
+    return true;
+  }
+  if (region.equals("INTERNAL"))
+  {
+    caps = MALLOC_CAP_INTERNAL;
+    return true;
+  }
+  if (region.equals("PSRAM") || region.equals("SPIRAM"))
+  {
+    caps = MALLOC_CAP_SPIRAM;
+    return true;
+  }
+  if (region.equals("8BIT"))
+  {
+    caps = MALLOC_CAP_8BIT;
+    return true;
+  }
+  if (region.equals("DMA"))
+  {
+    caps = MALLOC_CAP_DMA;
+    return true;
+  }
+
+  return false;
+}
+
+static void printMemoryRegionStats(const char *label, uint32_t caps)
+{
+  uint32_t total = heap_caps_get_total_size(caps);
+  uint32_t free = heap_caps_get_free_size(caps);
+  uint32_t largest = heap_caps_get_largest_free_block(caps);
+  Serial.printf("MEM %s => total=%u, free=%u, largest=%u\n", label, total, free, largest);
+}
+
+static void processMemoryUartCommand(const String &line)
+{
+  String command = line;
+  command.trim();
+  if (command.length() == 0)
+  {
+    return;
+  }
+
+  if (command.equalsIgnoreCase("MEM HELP"))
+  {
+    Serial.println("UART Memory commands:");
+    Serial.println("  MEM SHOW");
+    Serial.println("  MEM SHOW <DEFAULT|INTERNAL|PSRAM|8BIT|DMA>");
+    Serial.println("  MEM SHOW ALL");
+    Serial.println("  MEM ALLOC <DEFAULT|INTERNAL|PSRAM|8BIT|DMA> <bytes>");
+    Serial.println("  MEM FREE");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("MEM SHOW"))
+  {
+    printMemoryRegionStats("DEFAULT", MALLOC_CAP_DEFAULT);
+    return;
+  }
+
+  if (command.equalsIgnoreCase("MEM SHOW ALL"))
+  {
+    printMemoryRegionStats("DEFAULT", MALLOC_CAP_DEFAULT);
+    printMemoryRegionStats("INTERNAL", MALLOC_CAP_INTERNAL);
+    printMemoryRegionStats("PSRAM", MALLOC_CAP_SPIRAM);
+    printMemoryRegionStats("8BIT", MALLOC_CAP_8BIT);
+    printMemoryRegionStats("DMA", MALLOC_CAP_DMA);
+    return;
+  }
+
+  if (command.startsWith("MEM SHOW "))
+  {
+    String region = command.substring(strlen("MEM SHOW "));
+    region.trim();
+    uint32_t caps = 0;
+    if (!resolveMemoryCaps(region, caps))
+    {
+      Serial.println("Unknown memory region. Use MEM HELP.");
+      return;
+    }
+    printMemoryRegionStats(region.c_str(), caps);
+    return;
+  }
+
+  if (command.equalsIgnoreCase("MEM FREE"))
+  {
+    if (g_memTestPtr == nullptr)
+    {
+      Serial.println("No configured test block to free.");
+      return;
+    }
+
+    free(g_memTestPtr);
+    g_memTestPtr = nullptr;
+    g_memTestSize = 0;
+    g_memTestCaps = 0;
+    Serial.println("Configured memory block freed.");
+    return;
+  }
+
+  if (command.startsWith("MEM ALLOC "))
+  {
+    String payload = command.substring(strlen("MEM ALLOC "));
+    payload.trim();
+    int sep = payload.indexOf(' ');
+    if (sep <= 0)
+    {
+      Serial.println("Invalid format. Use: MEM ALLOC <REGION> <bytes>");
+      return;
+    }
+
+    String region = payload.substring(0, sep);
+    region.trim();
+    String sizeText = payload.substring(sep + 1);
+    sizeText.trim();
+    if (sizeText.length() == 0)
+    {
+      Serial.println("Invalid size. Use: MEM ALLOC <REGION> <bytes>");
+      return;
+    }
+
+    uint32_t caps = 0;
+    if (!resolveMemoryCaps(region, caps))
+    {
+      Serial.println("Unknown memory region. Use MEM HELP.");
+      return;
+    }
+
+    long req = sizeText.toInt();
+    if (req <= 0)
+    {
+      Serial.println("Size must be a positive integer (bytes).");
+      return;
+    }
+
+    if (g_memTestPtr != nullptr)
+    {
+      free(g_memTestPtr);
+      g_memTestPtr = nullptr;
+      g_memTestSize = 0;
+      g_memTestCaps = 0;
+    }
+
+    g_memTestPtr = heap_caps_malloc(static_cast<size_t>(req), caps);
+    if (g_memTestPtr == nullptr)
+    {
+      Serial.println("Allocation failed.");
+      printMemoryRegionStats(region.c_str(), caps);
+      return;
+    }
+
+    g_memTestSize = static_cast<uint32_t>(req);
+    g_memTestCaps = caps;
+    Serial.printf("Configured memory block: region=%s, bytes=%u, ptr=%p\n", region.c_str(), g_memTestSize, g_memTestPtr);
+    printMemoryRegionStats(region.c_str(), caps);
+    return;
+  }
+
+  Serial.println("Unknown memory command. Type MEM HELP");
 }
 
 static String trimCopy(const String &in)
@@ -250,6 +423,11 @@ static void processLedUartCommand(const String &line)
 static void handleUartWifiProvisioning(const String &line)
 {
   String command = trimCopy(line);
+  if (command.startsWith("MEM ") || command.equalsIgnoreCase("MEM HELP"))
+  {
+    processMemoryUartCommand(command);
+    return;
+  }
   if (command.startsWith("LED ") || command.equalsIgnoreCase("LED HELP"))
   {
     processLedUartCommand(command);
