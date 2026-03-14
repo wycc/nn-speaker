@@ -11,6 +11,7 @@ void I2SSampler::addSample(int16_t sample)
     if (m_write_ring_buffer_accessor->moveToNextSample())
     {
         // trigger the processor task as we've filled a buffer
+        Serial.println("Triggering processor task");
         xTaskNotify(m_processor_task_handle, 1, eSetBits);
     }
 }

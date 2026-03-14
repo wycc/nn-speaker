@@ -81,6 +81,12 @@ i2s_pin_config_t i2s_speaker_pins = {
 static Preferences g_wifiPrefs;
 static String g_uartInputLine;
 static IndicatorLight *g_indicatorLight = nullptr;
+static QueueHandle_t g_audioEventQueue = nullptr;
+
+struct AudioEvent
+{
+  uint32_t id;
+};
 
 static String trimCopy(const String &in)
 {
@@ -262,9 +268,46 @@ void applicationTask(void *param)
   {
     // wait for some audio samples to arrive
     uint32_t ulNotificationValue = ulTaskNotifyTake(pdTRUE, xMaxBlockTime);
+    Serial.printf("Application task notified, value=%lu\n", static_cast<unsigned long>(ulNotificationValue));
     if (ulNotificationValue > 0)
     {
       application->run();
+    }
+  }
+}
+
+void periodicAudioEventProducerTask(void *param)
+{
+  QueueHandle_t queue = static_cast<QueueHandle_t>(param);
+  uint32_t counter = 0;
+
+  while (true)
+  {
+    AudioEvent event{counter++};
+    if (xQueueSend(queue, &event, 0) == pdPASS)
+    {
+      Serial.printf("[AudioProducer] queued event id=%lu\n", static_cast<unsigned long>(event.id));
+    }
+    else
+    {
+      Serial.println("[AudioProducer] queue full, drop event");
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(5000));
+  }
+}
+
+void audioEventConsumerTask(void *param)
+{
+  Speaker *speaker = static_cast<Speaker *>(param);
+  AudioEvent event;
+
+  while (true)
+  {
+    if (xQueueReceive(g_audioEventQueue, &event, portMAX_DELAY) == pdPASS)
+    {
+      Serial.printf("[AudioConsumer] received event id=%lu, play sound\n", static_cast<unsigned long>(event.id));
+      speaker->playReady();
     }
   }
 }
@@ -324,6 +367,18 @@ void setup()
   I2SOutput *i2s_output = new I2SOutput();
   i2s_output->start(I2S_NUM_0, i2s_codec_pins, i2sCodecConfig);
   Speaker *speaker = new Speaker(i2s_output);
+
+  // queue + 2 tasks: one periodically sends event, another waits and plays sound.
+  g_audioEventQueue = xQueueCreate(8, sizeof(AudioEvent));
+  if (g_audioEventQueue == nullptr)
+  {
+    Serial.println("Failed to create audio event queue.");
+  }
+  else
+  {
+    xTaskCreate(periodicAudioEventProducerTask, "Audio Event Producer", 2048, g_audioEventQueue, 1, nullptr);
+    xTaskCreate(audioEventConsumerTask, "Audio Event Consumer", 3072, speaker, 1, nullptr);
+  }
 
   // indicator light to show when we are listening
   IndicatorLight *indicator_light = new IndicatorLight();
