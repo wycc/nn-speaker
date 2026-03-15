@@ -81,6 +81,7 @@ i2s_pin_config_t i2s_speaker_pins = {
 static Preferences g_wifiPrefs;
 static String g_uartInputLine;
 static IndicatorLight *g_indicatorLight = nullptr;
+static Speaker *g_speaker = nullptr;
 
 static String trimCopy(const String &in)
 {
@@ -230,9 +231,60 @@ static void processLedUartCommand(const String &line)
   }
 }
 
+static void processTtsUartCommand(const String &line)
+{
+  String command = trimCopy(line);
+  if (command.length() == 0)
+  {
+    return;
+  }
+
+  if (g_speaker == nullptr)
+  {
+    Serial.println("Speaker is not ready.");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("TTS HELP"))
+  {
+    Serial.println("UART TTS commands:");
+    Serial.println("  TTS <text>   – synthesize and play the given text via OpenAI TTS");
+    Serial.println("  TTS HELP     – show this help");
+    return;
+  }
+
+  // Everything after "TTS " is the text to speak
+  if (command.startsWith("TTS "))
+  {
+    String text = command.substring(strlen("TTS "));
+    text.trim();
+    if (text.length() == 0)
+    {
+      Serial.println("Usage: TTS <text>");
+      return;
+    }
+    Serial.printf("TTS: synthesizing \"%s\" ...\n", text.c_str());
+    bool ok = g_speaker->playTTS(text.c_str());
+    if (ok)
+    {
+      Serial.println("TTS: playback started.");
+    }
+    else
+    {
+      Serial.println("TTS: synthesis failed.");
+    }
+    return;
+  }
+}
+
 static void handleUartWifiProvisioning(const String &line)
 {
   String command = trimCopy(line);
+  if (command.startsWith("TTS ") || command.equalsIgnoreCase("TTS HELP"))
+  {
+    processTtsUartCommand(command);
+    return;
+  }
   if (command.startsWith("LED ") || command.equalsIgnoreCase("LED HELP"))
   {
     processLedUartCommand(command);
@@ -276,6 +328,7 @@ void setup()
   Serial.println("Starting up");
   Serial.println("UART WiFi provisioning enabled. Type WIFI HELP and press Enter.");
   Serial.println("UART LED control enabled. Type LED HELP and press Enter.");
+  Serial.println("UART TTS enabled. Type TTS HELP and press Enter.");
 
 #ifdef BOARD_HAS_PSRAM
   // Prefer external RAM for generic malloc to keep internal RAM for TLS handshake.
@@ -324,6 +377,8 @@ void setup()
   I2SOutput *i2s_output = new I2SOutput();
   i2s_output->start(I2S_NUM_0, i2s_codec_pins, i2sCodecConfig);
   Speaker *speaker = new Speaker(i2s_output);
+
+  g_speaker = speaker;
 
   // indicator light to show when we are listening
   IndicatorLight *indicator_light = new IndicatorLight();
