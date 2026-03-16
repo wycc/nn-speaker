@@ -1,3 +1,4 @@
 {
-  "idf.pythonInstallPath": "/home/wycc/.platformio/penv/bin/python"
+  "idf.pythonInstallPath": "/home/wycc/.platformio/penv/bin/python",
+  "cmake.sourceDirectory": "C:/source/wycc/nn-speaker/firmware/lib/tfmicro"
 }

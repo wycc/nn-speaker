@@ -297,7 +297,7 @@ void setup()
   String wifiSsid;
   String wifiPassword;
   loadWifiCredentials(wifiSsid, wifiPassword);
-  Serial.printf("Connecting to SSID: %s\n", wifiSsid.c_str());
+  Serial.printf("Connecting to SSID: %s %s\n", wifiSsid.c_str(),wifiPassword.c_str());
 
   WiFi.mode(WIFI_STA);
   WiFi.begin(wifiSsid.c_str(), wifiPassword.c_str());
