@@ -14,6 +14,7 @@
 #include "Speaker.h"
 #include "IndicatorLight.h"
 #include "AudioKitHAL.h"
+#include "OpenAILLM.h"
 
 // i2s config for using the internal ADC
 i2s_config_t adcI2SConfig = {
@@ -82,6 +83,7 @@ static Preferences g_wifiPrefs;
 static String g_uartInputLine;
 static IndicatorLight *g_indicatorLight = nullptr;
 static Speaker *g_speaker = nullptr;
+static OpenAILLM *g_llm = nullptr;
 
 static String trimCopy(const String &in)
 {
@@ -277,9 +279,92 @@ static void processTtsUartCommand(const String &line)
   }
 }
 
+static void processLlmUartCommand(const String &line)
+{
+  String command = trimCopy(line);
+  if (command.length() == 0)
+  {
+    return;
+  }
+
+  if (g_llm == nullptr)
+  {
+    Serial.println("LLM is not ready.");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("LLM HELP"))
+  {
+    Serial.println("UART LLM commands:");
+    Serial.println("  LLM <text>            – send a message to OpenAI Chat API");
+    Serial.println("  LLM SYSTEM <prompt>   – set the system prompt");
+    Serial.println("  LLM MODEL <name>      – change the model (e.g. gpt-4o)");
+    Serial.println("  LLM HELP              – show this help");
+    return;
+  }
+
+  if (command.startsWith("LLM SYSTEM "))
+  {
+    String prompt = command.substring(strlen("LLM SYSTEM "));
+    prompt.trim();
+    static String systemPromptStorage;
+    systemPromptStorage = prompt;
+    g_llm->setSystemPrompt(systemPromptStorage.c_str());
+    Serial.printf("LLM system prompt set to: %s\n", systemPromptStorage.c_str());
+    return;
+  }
+
+  if (command.startsWith("LLM MODEL "))
+  {
+    String model = command.substring(strlen("LLM MODEL "));
+    model.trim();
+    static String modelStorage;
+    modelStorage = model;
+    g_llm->setModel(modelStorage.c_str());
+    Serial.printf("LLM model changed to: %s\n", modelStorage.c_str());
+    return;
+  }
+
+  // Everything after "LLM " is the user message
+  if (command.startsWith("LLM "))
+  {
+    String text = command.substring(strlen("LLM "));
+    text.trim();
+    if (text.length() == 0)
+    {
+      Serial.println("Usage: LLM <text>");
+      return;
+    }
+    Serial.printf("LLM: sending \"%s\" ...\n", text.c_str());
+    unsigned long startTime = millis();
+
+    String reply = g_llm->chat(text.c_str());
+
+    unsigned long elapsed = millis() - startTime;
+    if (reply.length() > 0)
+    {
+      Serial.println();
+      Serial.println("--- Assistant ---");
+      Serial.println(reply);
+      Serial.println("-----------------");
+      Serial.printf("(took %lu ms)\n", elapsed);
+    }
+    else
+    {
+      Serial.println("LLM: no reply or error occurred.");
+    }
+    return;
+  }
+}
+
 static void handleUartWifiProvisioning(const String &line)
 {
   String command = trimCopy(line);
+  if (command.startsWith("LLM ") || command.equalsIgnoreCase("LLM HELP"))
+  {
+    processLlmUartCommand(command);
+    return;
+  }
   if (command.startsWith("TTS ") || command.equalsIgnoreCase("TTS HELP"))
   {
     processTtsUartCommand(command);
@@ -329,6 +414,7 @@ void setup()
   Serial.println("UART WiFi provisioning enabled. Type WIFI HELP and press Enter.");
   Serial.println("UART LED control enabled. Type LED HELP and press Enter.");
   Serial.println("UART TTS enabled. Type TTS HELP and press Enter.");
+  Serial.println("UART LLM enabled. Type LLM HELP and press Enter.");
 
 #ifdef BOARD_HAS_PSRAM
   // Prefer external RAM for generic malloc to keep internal RAM for TLS handshake.
@@ -379,6 +465,7 @@ void setup()
   Speaker *speaker = new Speaker(i2s_output);
 
   g_speaker = speaker;
+  g_llm = new OpenAILLM(OPENAI_API_KEY, "gpt-4o-mini");
 
   // indicator light to show when we are listening
   IndicatorLight *indicator_light = new IndicatorLight();
