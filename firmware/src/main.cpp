@@ -299,7 +299,15 @@ static void processLlmUartCommand(const String &line)
     Serial.println("  LLM <text>            – send a message to OpenAI Chat API");
     Serial.println("  LLM SYSTEM <prompt>   – set the system prompt");
     Serial.println("  LLM MODEL <name>      – change the model (e.g. gpt-4o)");
+    Serial.println("  LLM RESET             – clear multi-turn conversation history");
     Serial.println("  LLM HELP              – show this help");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("LLM RESET") || command.equalsIgnoreCase("LLM CLEAR"))
+  {
+    g_llm->clearHistory();
+    Serial.println("LLM history cleared.");
     return;
   }
 
