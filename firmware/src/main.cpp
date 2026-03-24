@@ -105,82 +105,101 @@ void applicationTask(void *param)
   }
 }
 
+namespace
+{
+uint8_t *g_internalBuf = nullptr;
+uint8_t *g_dmaBuf = nullptr;
+uint8_t *g_psramBuf = nullptr;
+unsigned long g_lastMemoryExerciseMs = 0;
+constexpr unsigned long kMemoryExerciseIntervalMs = 5000;
+}
+
+void printCapabilityStatus(const char *label, uint32_t capability)
+{
+  Serial.printf("%s free: %u bytes\n", label, heap_caps_get_free_size(capability));
+  Serial.printf("%s largest block: %u bytes\n", label, heap_caps_get_largest_free_block(capability));
+}
+
+void printMemoryStatus(const char *phase)
+{
+  Serial.printf("\n=== %s ===\n", phase);
+  Serial.printf("Heap total: %u bytes\n", ESP.getHeapSize());
+  Serial.printf("Heap free: %u bytes\n", ESP.getFreeHeap());
+  Serial.printf("Internal free: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+  Serial.printf("PSRAM free: %u bytes\n", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+  printCapabilityStatus("MALLOC_CAP_INTERNAL", MALLOC_CAP_INTERNAL);
+  printCapabilityStatus("MALLOC_CAP_8BIT", MALLOC_CAP_8BIT);
+  printCapabilityStatus("MALLOC_CAP_DMA", MALLOC_CAP_DMA);
+  printCapabilityStatus("MALLOC_CAP_SPIRAM", MALLOC_CAP_SPIRAM);
+}
+
+void releaseMemoryBuffers()
+{
+  if (g_internalBuf != nullptr)
+  {
+    heap_caps_free(g_internalBuf);
+    g_internalBuf = nullptr;
+  }
+
+  if (g_dmaBuf != nullptr)
+  {
+    heap_caps_free(g_dmaBuf);
+    g_dmaBuf = nullptr;
+  }
+
+  if (g_psramBuf != nullptr)
+  {
+    heap_caps_free(g_psramBuf);
+    g_psramBuf = nullptr;
+  }
+}
+
+void runMemoryExercise()
+{
+  releaseMemoryBuffers();
+  printMemoryStatus("Before Allocation");
+
+  Serial.println(">>> Performing heap_caps_malloc...");
+  g_internalBuf = static_cast<uint8_t *>(heap_caps_malloc(16 * 1024, MALLOC_CAP_INTERNAL));
+  g_dmaBuf = static_cast<uint8_t *>(heap_caps_malloc(8 * 1024, MALLOC_CAP_DMA));
+  g_psramBuf = static_cast<uint8_t *>(heap_caps_malloc(64 * 1024, MALLOC_CAP_SPIRAM));
+
+  Serial.printf("Internal SRAM allocation (16 KB): %s\n", g_internalBuf ? "success" : "failed");
+  Serial.printf("DMA memory allocation (8 KB): %s\n", g_dmaBuf ? "success" : "failed");
+  Serial.printf("PSRAM allocation (64 KB): %s\n", g_psramBuf ? "success" : "failed");
+  printMemoryStatus("After Allocation");
+}
+
 void setup()
 {
   Serial.begin(115200);
+  unsigned long serialWaitStart = millis();
+  while (!Serial && millis() - serialWaitStart < 5000)
+  {
+    delay(10);
+  }
   delay(1000);
-  Serial.println("Starting up");
+  Serial.println();
+  Serial.println("Starting Exercise 2 memory monitor");
 
 #ifdef BOARD_HAS_PSRAM
   // Prefer external RAM for generic malloc to keep internal RAM for TLS handshake.
   heap_caps_malloc_extmem_enable(0);
 #endif
 
-  // start up wifi
-  // launch WiFi
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PSWD);
-  if (WiFi.waitForConnectResult() != WL_CONNECTED)
-  {
-    Serial.println("Connection Failed! Rebooting...");
-    delay(5000);
-    //ESP.restart();
-  }
-  Serial.printf("Total heap: %d\n", ESP.getHeapSize());
-  Serial.printf("Free heap: %d\n", ESP.getFreeHeap());
-  Serial.printf("Total PSRAM: %d\n", ESP.getPsramSize());
-  Serial.printf("Free PSRAM: %d\n", ESP.getFreePsram());
-  Serial.printf("Internal heap free: %u\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-  Serial.printf("Internal heap largest block: %u\n", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
-  Serial.printf("Chip model: %s\n", ESP.getChipModel());
-
-  // startup SPIFFS for the wav files
-  SPIFFS.begin();
-  // make sure we don't get killed for our long running tasks
-  esp_task_wdt_init(10, false);
-
-  es8388_init();
-  // start up the I2S input (from either an I2S microphone or Analogue microphone via the ADC)
-#ifdef USE_I2S_MIC_INPUT
-  // Direct i2s input from INMP441 or the SPH0645
-  I2SSampler *i2s_sampler = new I2SMicSampler(i2s_codec_pins, false);
-#else
-  // Use the internal ADC
-  I2SSampler *i2s_sampler = new ADCSampler(ADC_UNIT_1, ADC_MIC_CHANNEL);
-#endif
-
-  // start the i2s speaker output
-  I2SOutput *i2s_output = new I2SOutput();
-  i2s_output->start(I2S_NUM_0, i2s_codec_pins, i2sCodecConfig);
-  Speaker *speaker = new Speaker(i2s_output);
-
-  // indicator light to show when we are listening
-  IndicatorLight *indicator_light = new IndicatorLight();
-
-  // and the intent processor
-  IntentProcessor *intent_processor = new IntentProcessor(speaker);
-  /*
-  intent_processor->addDevice("kitchen", GPIO_NUM_5);
-  intent_processor->addDevice("bedroom", GPIO_NUM_21);
-  intent_processor->addDevice("table", GPIO_NUM_23);
-  */
-
-  // create our application
-  Application *application = new Application(i2s_sampler, intent_processor, speaker, indicator_light);
-
-  // set up the i2s sample writer task
-  TaskHandle_t applicationTaskHandle;
-  xTaskCreate(applicationTask, "Application Task", 4096, application, 1, &applicationTaskHandle);
-
-  // start sampling from i2s device - use I2S_NUM_0 as that's the one that supports the internal ADC
-#ifdef USE_I2S_MIC_INPUT
-  i2s_sampler->start(I2S_NUM_0, i2sCodecConfig, applicationTaskHandle);
-#else
-  i2s_sampler->start(I2S_NUM_0, adcI2SConfig, applicationTaskHandle);
-#endif
+  runMemoryExercise();
+  g_lastMemoryExerciseMs = millis();
+  Serial.println("Exercise mode active: only memory information will be printed.");
 }
 
 void loop()
 {
+  if (millis() - g_lastMemoryExerciseMs >= kMemoryExerciseIntervalMs)
+  {
+    Serial.println("\nRepeating memory exercise for easier Serial Monitor capture...");
+    runMemoryExercise();
+    g_lastMemoryExerciseMs = millis();
+  }
+
   vTaskDelay(1000);
 }
