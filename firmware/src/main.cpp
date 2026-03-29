@@ -77,6 +77,42 @@ i2s_pin_config_t i2s_speaker_pins = {
     .data_out_num = I2S_SPEAKER_SERIAL_DATA,
     .data_in_num = I2S_PIN_NO_CHANGE};
 
+// ── Part 1: Memory Status Function ───────────────────────────────────────────
+// Prints current memory usage for all major capability types.
+// Called before and after allocation to observe changes (Parts 3).
+void printMemoryStatus(const char* label)
+{
+    Serial.printf("\n=== %s ===\n", label);
+
+    // ── Default heap (Internal SRAM + PSRAM combined) ─────────────────────────
+    // MALLOC_CAP_DEFAULT covers all memory the allocator can hand out.
+    Serial.printf("Heap total        : %6u bytes\n", heap_caps_get_total_size(MALLOC_CAP_DEFAULT));
+    Serial.printf("Heap free         : %6u bytes\n", heap_caps_get_free_size(MALLOC_CAP_DEFAULT));
+
+    // ── Internal SRAM ─────────────────────────────────────────────────────────
+    // MALLOC_CAP_INTERNAL = on-chip SRAM only; never includes PSRAM.
+    // "largest block" reveals fragmentation: free may be large but usable
+    // contiguous space can be much smaller.
+    Serial.printf("Internal total    : %6u bytes\n", heap_caps_get_total_size(MALLOC_CAP_INTERNAL));
+    Serial.printf("Internal free     : %6u bytes\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    Serial.printf("Internal largest  : %6u bytes\n", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+
+    // ── 8-bit capable memory ──────────────────────────────────────────────────
+    // MALLOC_CAP_8BIT = memory that supports byte-level access.
+    // On ESP32: internal SRAM + PSRAM both qualify; IRAM does NOT.
+    Serial.printf("8-bit total       : %6u bytes\n", heap_caps_get_total_size(MALLOC_CAP_8BIT));
+    Serial.printf("8-bit free        : %6u bytes\n", heap_caps_get_free_size(MALLOC_CAP_8BIT));
+
+    // ── PSRAM / SPIRAM ────────────────────────────────────────────────────────
+    // MALLOC_CAP_SPIRAM = external SPI-connected RAM (PSRAM).
+    // Same physical chip, two names: SPIRAM (capability flag) vs PSRAM (hardware term).
+    Serial.printf("SPIRAM total      : %6u bytes\n", heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
+    Serial.printf("SPIRAM free       : %6u bytes\n", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+    Serial.printf("Total PSRAM: %d\n", ESP.getPsramSize());
+    Serial.printf("Free PSRAM: %d\n", ESP.getFreePsram());
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 void es8388_init(void)
 {
     audiokit::AudioKit kit;
@@ -126,13 +162,48 @@ void setup()
     delay(5000);
     //ESP.restart();
   }
-  Serial.printf("Total heap: %d\n", ESP.getHeapSize());
-  Serial.printf("Free heap: %d\n", ESP.getFreeHeap());
-  Serial.printf("Total PSRAM: %d\n", ESP.getPsramSize());
-  Serial.printf("Free PSRAM: %d\n", ESP.getFreePsram());
-  Serial.printf("Internal heap free: %u\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
-  Serial.printf("Internal heap largest block: %u\n", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
-  Serial.printf("Chip model: %s\n", ESP.getChipModel());
+  // Original individual memory prints (kept for reference):
+  // Serial.printf("Total heap: %d\n", ESP.getHeapSize());
+  // Serial.printf("Free heap: %d\n", ESP.getFreeHeap());
+  // Serial.printf("Total PSRAM: %d\n", ESP.getPsramSize());
+  // Serial.printf("Free PSRAM: %d\n", ESP.getFreePsram());
+  // Serial.printf("Internal heap free: %u\n", heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+  // Serial.printf("Internal heap largest block: %u\n", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
+  // Serial.printf("Chip model: %s\n", ESP.getChipModel());
+
+  // Part 1 + Part 3: print memory status BEFORE allocation
+  printMemoryStatus("=== Before Allocation ===");
+
+  // ── Part 2: Allocate different memory types ───────────────────────────────
+  // Each call uses heap_caps_malloc(size, capability) to request memory
+  // from a specific region. NULL is returned if the region has no space.
+
+  // 16 KB from internal SRAM (on-chip, fastest, limited ~200 KB free)
+  uint8_t* internal_buf = (uint8_t*) heap_caps_malloc(16 * 1024, MALLOC_CAP_INTERNAL);
+
+  // 8 KB DMA-capable memory (subset of internal SRAM; required by peripherals
+  // like I2S, SPI that do direct memory access without CPU involvement)
+  uint8_t* dma_buf = (uint8_t*) heap_caps_malloc(8 * 1024, MALLOC_CAP_DMA);
+
+  // 64 KB from external PSRAM (slow SPI bus, but ~4 MB available)
+  uint8_t* psram_buf = (uint8_t*) heap_caps_malloc(64 * 1024, MALLOC_CAP_SPIRAM);
+
+  // 100 KB from Internal SRAM — intentionally large to force the allocator
+  // to cut into the largest contiguous block (110,580 B).
+  // After this, Internal largest should drop from ~110 KB to ~10 KB,
+  // demonstrating heap fragmentation.
+  uint8_t* frag_buf = (uint8_t*) heap_caps_malloc(100 * 1024, MALLOC_CAP_INTERNAL);
+
+  // Report whether each allocation succeeded
+  Serial.println("\n--- Allocation Results ---");
+  Serial.printf("internal_buf  ( 16 KB, MALLOC_CAP_INTERNAL) : %s\n", internal_buf ? "OK" : "FAILED");
+  Serial.printf("dma_buf       (  8 KB, MALLOC_CAP_DMA)      : %s\n", dma_buf      ? "OK" : "FAILED");
+  Serial.printf("psram_buf     ( 64 KB, MALLOC_CAP_SPIRAM)   : %s\n", psram_buf    ? "OK" : "FAILED");
+  Serial.printf("frag_buf      (100 KB, MALLOC_CAP_INTERNAL) : %s\n", frag_buf     ? "OK" : "FAILED");
+
+  // Part 3: print memory status AFTER allocation to observe the change
+  // Key observation: Internal largest should drop significantly (fragmentation)
+  printMemoryStatus("=== After Allocation ===");
 
   // startup SPIFFS for the wav files
   SPIFFS.begin();
