@@ -1,4 +1,11 @@
 #include <Arduino.h>
+#include "exercises/MemoryObservationExercise.h"
+
+#ifndef RUN_MEMORY_OBSERVATION_EXERCISE
+#define RUN_MEMORY_OBSERVATION_EXERCISE 1
+#endif
+
+#if !RUN_MEMORY_OBSERVATION_EXERCISE
 #include <WiFi.h>
 #include <driver/i2s.h>
 #include <esp_task_wdt.h>
@@ -13,7 +20,20 @@
 #include "Speaker.h"
 #include "IndicatorLight.h"
 #include "AudioKitHAL.h"
+#endif
 
+#if RUN_MEMORY_OBSERVATION_EXERCISE
+namespace
+{
+MemoryObservationExercise g_memory_exercise;
+bool g_exercise_started = false;
+unsigned long g_next_exercise_run_ms = 3000;
+constexpr unsigned long kExerciseRepeatIntervalMs = 15000;
+unsigned long g_next_status_ms = 1000;
+}
+#endif
+
+#if !RUN_MEMORY_OBSERVATION_EXERCISE
 // i2s config for using the internal ADC
 i2s_config_t adcI2SConfig = {
     .mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX | I2S_MODE_ADC_BUILT_IN),
@@ -104,17 +124,28 @@ void applicationTask(void *param)
     }
   }
 }
+#endif
 
 void setup()
 {
   Serial.begin(115200);
-  delay(1000);
+  delay(2000);
   Serial.println("Starting up");
+  Serial.flush();
 
-#ifdef BOARD_HAS_PSRAM
+#if defined(BOARD_HAS_PSRAM) && !RUN_MEMORY_OBSERVATION_EXERCISE
   // Prefer external RAM for generic malloc to keep internal RAM for TLS handshake.
   heap_caps_malloc_extmem_enable(0);
 #endif
+
+#if RUN_MEMORY_OBSERVATION_EXERCISE
+  Serial.println("Exercise mode armed. Waiting for serial monitor...");
+  Serial.println("A full memory report will print repeatedly every 15 seconds.");
+  Serial.flush();
+  return;
+#endif
+
+#if !RUN_MEMORY_OBSERVATION_EXERCISE
 
   // start up wifi
   // launch WiFi
@@ -178,9 +209,32 @@ void setup()
 #else
   i2s_sampler->start(I2S_NUM_0, adcI2SConfig, applicationTaskHandle);
 #endif
+
+#endif
 }
 
 void loop()
 {
+#if RUN_MEMORY_OBSERVATION_EXERCISE
+  const unsigned long now = millis();
+  if (now >= g_next_status_ms)
+  {
+    Serial.printf("[alive] uptime=%lu ms\r\n", now);
+    Serial.flush();
+    g_next_status_ms = now + 1000;
+  }
+  if (!g_exercise_started || now >= g_next_exercise_run_ms)
+  {
+    g_memory_exercise.runOnce();
+    Serial.println("Exercise mode complete. Waiting before next report.");
+    Serial.println();
+    Serial.flush();
+    g_exercise_started = true;
+    g_next_exercise_run_ms = now + kExerciseRepeatIntervalMs;
+  }
+  delay(250);
+  return;
+#endif
+
   vTaskDelay(1000);
 }
