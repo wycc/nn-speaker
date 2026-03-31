@@ -1,0 +1,45 @@
+=== Before Allocation ===
+Heap total size : 327680
+Heap free size : 258944
+Internal free (SRAM) : 258944
+PSRAM free : 4186112
+-- Free by capability --
+MALLOC_CAP_INTERNAL : 258944
+MALLOC_CAP_8BIT : 4445056
+MALLOC_CAP_DMA : 131072
+MALLOC_CAP_SPIRAM : 4186112
+-- Largest free block --
+INTERNAL largest : 184320
+8BIT largest : 4128768
+DMA largest : 98304
+SPIRAM largest : 4128768
+
+Allocation result:
+internal_buf: OK
+dma_buf : OK
+psram_buf : OK
+
+=== After Allocation ===
+Heap total size : 327680
+Heap free size : 234240
+Internal free (SRAM) : 234240
+PSRAM free : 4120576
+-- Free by capability --
+MALLOC_CAP_INTERNAL : 234240
+MALLOC_CAP_8BIT : 4371328
+MALLOC_CAP_DMA : 122880
+MALLOC_CAP_SPIRAM : 4120576
+-- Largest free block --
+INTERNAL largest : 159744
+8BIT largest : 4063232
+DMA largest : 90112
+SPIRAM largest : 4063232
+
+=== Delta (After - Before) ===
+Heap free delta : -24704
+Internal free delta : -24704
+PSRAM free delta : -65536
+CAP_INTERNAL delta : -24704
+CAP_8BIT delta : -73728
+CAP_DMA delta : -8192
+CAP_SPIRAM delta : -65536
