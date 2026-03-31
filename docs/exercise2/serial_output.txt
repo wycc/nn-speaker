@@ -1,0 +1,49 @@
+Starting up
+=== Before Allocation ===
+Heap total size       : 327680
+Heap free size        : 258944
+Internal free (SRAM)  : 258944
+PSRAM free            : 4186112
+-- Free by capability --
+MALLOC_CAP_INTERNAL   : 258944
+MALLOC_CAP_8BIT       : 4445056
+MALLOC_CAP_DMA        : 131072
+MALLOC_CAP_SPIRAM     : 4186112
+-- Largest free block --
+INTERNAL largest      : 184320
+8BIT largest          : 4128768
+DMA largest           : 98304
+SPIRAM largest        : 4128768
+
+Allocation result:
+internal_buf: OK
+dma_buf     : OK
+psram_buf   : OK
+
+=== After Allocation ===
+Heap total size       : 327680
+Heap free size        : 234240
+Internal free (SRAM)  : 234240
+PSRAM free            : 4120320
+-- Free by capability --
+MALLOC_CAP_INTERNAL   : 234240
+MALLOC_CAP_8BIT       : 4353984
+MALLOC_CAP_DMA        : 122624
+MALLOC_CAP_SPIRAM     : 4120320
+-- Largest free block --
+INTERNAL largest      : 159744
+8BIT largest          : 4062976
+DMA largest           : 90112
+SPIRAM largest        : 4062976
+
+=== Delta (After - Before) ===
+Heap free delta       : -24704
+Internal free delta   : -24704
+PSRAM free delta      : -65792
+CAP_INTERNAL delta    : -24704
+CAP_8BIT delta        : -91072
+CAP_DMA delta         : -8448
+CAP_SPIRAM delta      : -65792
+
+備註：
+- 此輸出為實機量測結果，實際數據仍會依板型、SDK 版本、啟動配置而異。
