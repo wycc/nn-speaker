@@ -6,6 +6,7 @@
 #include <driver/i2s.h>
 #include <esp_task_wdt.h>
 #include <esp_heap_caps.h>
+#include <time.h>
 #include "I2SMicSampler.h"
 #include "ADCSampler.h"
 #include "I2SOutput.h"
@@ -91,6 +92,139 @@ static String g_openaiApiKey;
 static IndicatorLight *g_indicatorLight = nullptr;
 static Speaker *g_speaker = nullptr;
 static OpenAILLM *g_llm = nullptr;
+static const uint32_t HEARTBEAT_INTERVAL_MS = 60UL * 1000UL;
+static uint32_t g_lastHeartbeatAtMs = 0;
+
+static String trimCopy(const String &in);
+static String llmToolHandler(const String &reply);
+
+static String readHeartbeatMarkdownFromFs()
+{
+  File file = LittleFS.open("/HEARTBEAT.md", "r");
+  if (!file)
+  {
+    Serial.println("HEARTBEAT: failed to open /HEARTBEAT.md");
+    return String();
+  }
+
+  String content = file.readString();
+  file.close();
+  content.trim();
+  return content;
+}
+
+static void sendHeartbeatToLlmIfDue()
+{
+  if (g_llm == nullptr)
+  {
+    return;
+  }
+
+  const uint32_t now = millis();
+  if ((now - g_lastHeartbeatAtMs) < HEARTBEAT_INTERVAL_MS)
+  {
+    return;
+  }
+
+  g_lastHeartbeatAtMs = now;
+
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("HEARTBEAT: skipped (WiFi not connected)");
+    return;
+  }
+
+  String heartbeatMarkdown = readHeartbeatMarkdownFromFs();
+  if (heartbeatMarkdown.length() == 0)
+  {
+    Serial.println("HEARTBEAT: skipped (empty /HEARTBEAT.md)");
+    return;
+  }
+
+  String heartbeatMessage = "[HEARTBEAT]\n";
+  heartbeatMessage += heartbeatMarkdown;
+
+  Serial.printf("HEARTBEAT: sending %d bytes to LLM...\n", heartbeatMessage.length());
+  String reply = g_llm->chatV3(heartbeatMessage.c_str(), llmToolHandler, 5);
+  if (reply.length() > 0)
+  {
+    Serial.printf("HEARTBEAT: LLM reply length = %d\n", reply.length());
+  }
+  else
+  {
+    Serial.println("HEARTBEAT: no reply or request failed");
+  }
+}
+
+static bool initializeRtcFromSntp(uint32_t timeoutMs = 15000)
+{
+  if (WiFi.status() != WL_CONNECTED)
+  {
+    Serial.println("SNTP skipped: WiFi is not connected.");
+    return false;
+  }
+
+  Serial.println("Initializing RTC from SNTP...");
+  configTime(0, 0, "pool.ntp.org", "time.nist.gov", "time.google.com");
+
+  const uint32_t start = millis();
+  time_t now = time(nullptr);
+  while (now < 1700000000 && (millis() - start) < timeoutMs)
+  {
+    delay(200);
+    now = time(nullptr);
+  }
+
+  if (now < 1700000000)
+  {
+    Serial.println("SNTP sync timeout, RTC is not initialized yet.");
+    return false;
+  }
+
+  struct tm utcTime;
+  gmtime_r(&now, &utcTime);
+  char timeBuffer[32];
+  strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", &utcTime);
+  Serial.printf("RTC initialized via SNTP: %s UTC\n", timeBuffer);
+  return true;
+}
+
+static void processTimeUartCommand(const String &line)
+{
+  String command = trimCopy(line);
+  if (command.length() == 0)
+  {
+    return;
+  }
+
+  if (command.equalsIgnoreCase("TIME HELP"))
+  {
+    Serial.println("UART TIME commands:");
+    Serial.println("  TIME NOW   - show current RTC time in UTC");
+    Serial.println("  TIME HELP  - show this help");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("TIME") || command.equalsIgnoreCase("TIME NOW"))
+  {
+    time_t now = time(nullptr);
+    if (now < 1700000000)
+    {
+      Serial.println("RTC time is not initialized yet.");
+      return;
+    }
+
+    struct tm utcTime;
+    gmtime_r(&now, &utcTime);
+    char timeBuffer[32];
+    strftime(timeBuffer, sizeof(timeBuffer), "%Y-%m-%d %H:%M:%S", &utcTime);
+    Serial.printf("RTC UTC time: %s\n", timeBuffer);
+    Serial.printf("RTC epoch: %lld\n", static_cast<long long>(now));
+    return;
+  }
+
+  Serial.println("Unknown TIME command. Type TIME HELP");
+}
 
 static String trimCopy(const String &in)
 {
@@ -572,6 +706,11 @@ static void handleUartWifiProvisioning(const String &line)
     processLedUartCommand(command);
     return;
   }
+  if (command.startsWith("TIME ") || command.equalsIgnoreCase("TIME") || command.equalsIgnoreCase("TIME HELP"))
+  {
+    processTimeUartCommand(command);
+    return;
+  }
   processWifiUartCommand(command);
 }
 
@@ -613,6 +752,7 @@ void setup()
   Serial.println("UART TTS enabled. Type TTS HELP and press Enter.");
   Serial.println("UART LLM enabled. Type LLM HELP and press Enter.");
   Serial.println("UART KEY management enabled. Type KEY HELP and press Enter.");
+  Serial.println("UART TIME enabled. Type TIME HELP and press Enter.");
 
 #ifdef BOARD_HAS_PSRAM
   // Prefer external RAM for generic malloc to keep internal RAM for TLS handshake.
@@ -642,8 +782,11 @@ void setup()
   Serial.printf("Internal heap largest block: %u\n", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
   Serial.printf("Chip model: %s\n", ESP.getChipModel());
 
+  initializeRtcFromSntp();
+
   // startup LittleFS for the wav files
   LittleFS.begin();
+  g_lastHeartbeatAtMs = millis();
   // make sure we don't get killed for our long running tasks
   esp_task_wdt_init(10, false);
 
@@ -713,6 +856,8 @@ void setup()
 
 void loop()
 {
+  sendHeartbeatToLlmIfDue();
+
   while (Serial.available() > 0)
   {
     char ch = static_cast<char>(Serial.read());

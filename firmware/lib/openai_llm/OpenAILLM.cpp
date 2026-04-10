@@ -4,6 +4,7 @@
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <esp_heap_caps.h>
+#include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -45,14 +46,42 @@ static String jsonEscape(const String &text)
 }
 
 /**
+ * Build a dynamic system message containing the current device time.
+ */
+static String buildCurrentTimeSystemPrompt()
+{
+    time_t now = time(nullptr);
+    if (now <= 100000)
+    {
+        return String("Current time: unavailable (device clock not set)");
+    }
+
+    struct tm utc_tm;
+    struct tm local_tm;
+    gmtime_r(&now, &utc_tm);
+    localtime_r(&now, &local_tm);
+
+    char utc_buf[32];
+    char local_buf[40];
+    strftime(utc_buf, sizeof(utc_buf), "%Y-%m-%dT%H:%M:%SZ", &utc_tm);
+    strftime(local_buf, sizeof(local_buf), "%Y-%m-%d %H:%M:%S %z", &local_tm);
+
+    String prompt = "Current time (UTC): ";
+    prompt += utc_buf;
+    prompt += " | Local time: ";
+    prompt += local_buf;
+    return prompt;
+}
+
+/**
  * Build the JSON request body for the Chat Completions API.
  */
 static String buildRequestBodyV2(const char *model,
-                               const char *system_prompt,
-                               const String *history_roles,
-                               const String *history_contents,
-                               uint8_t history_count,
-                               const char *user_message)
+                                const char *system_prompt,
+                                const String *history_roles,
+                                const String *history_contents,
+                                uint8_t history_count,
+                                const char *user_message)
 {
     String body;
     body.reserve(512 + strlen(user_message));
@@ -60,6 +89,12 @@ static String buildRequestBodyV2(const char *model,
     body += "{\"model\":\"";
     body += model;
     body += "\",\"messages\":[";
+
+    // Dynamic current-time system message (always injected first)
+    String currentTimePrompt = buildCurrentTimeSystemPrompt();
+    body += "{\"role\":\"system\",\"content\":\"";
+    body += jsonEscape(currentTimePrompt);
+    body += "\"},";
 
     // Optional system message
     if (system_prompt && system_prompt[0] != '\0')
