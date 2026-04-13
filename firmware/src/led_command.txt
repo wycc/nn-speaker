@@ -1,0 +1,45 @@
+esp32-micron
+
+esp32 micron uart 溝通命令格式
+1. 傳輸使用 ascii code
+
+2. 格式為 {0123456789}，左大括號提示命令或回應開始，右大括號提示命令或回應結束。中間包裹數字字串。
+不在大括號的內容會被忽略。
+
+3. {01nm} 讀取 led 暫存器內容，從第 n 個 led 開始，總共讀取 m 個暫存器。目前最多有 8 個
+暫存器，所以 n 範圍 0~7，m 範圍 1~8。
+回應格式 {4101nn}，
+nn = ff 為輸入不完全。
+nn = fe 為輸入參數有錯。
+回應格式 {41nndddddddd..}，為成功。nn 表示後面有幾個 bytes 的數字，dd 以 8 字元為一組表示
+led 暫存器的內容，分別代表 led red(byte), led green(byte), led blue(byte), led power(byte)
+。
+例如 esp32 -> micron {0112} 就是讀取從 led1 (假設第一個暫存器為 led0) 到 led2 總數 2 個暫存器，
+回應 micron -> esp32 {4108332211A5332211A5} 表示讀取 8 bytes，led1 red green blue power,
+led2 red green blue power.以此類推。
+
+4. {04} 讀取 micron 電池、測試模式、上鎖、led 暫存器異動、長按狀態等內部狀態
+回應 {440003ffbbbb} ff bit0 無用，bit1 表示測試狀態，測試狀態 led 進行測試模式。
+bit3 為上鎖。bit4 led 暫存器異動。bit5 有長按。
+bbbb 為電池讀數。
+
+{04nntttt} 功能類似，差別在 nn 指定後面 tttt 的 byte 長度，tttt 為任意值，可當成 timestamp
+回應 {44mmmmffbbbbtttt}
+
+5. {81nnxdddd..} 設定 led 暫存器。從 led x 開始設定(假設第一個暫存器為 led0)，設定 nn bytes。dddd 為 led 暫存器設定內容。
+
+
+例如 esp32 -> micron {81080332211a5332211a5} 設定從 led0 開始總共 2 個 led 暫存器
+(8 bytes) 的資料，資料排列與 {01..} 讀取 led 暫存器類似。
+
+6. {860100} 解鎖。
+ {860101} 上鎖。micron 控制了一個按鈕，上鎖可忽略此按鍵。
+ {c601ff} 為輸入不完全。
+ {c60100} 指令成功。
+ 
+7. {8701nn} 設定 led 全體亮度。nn 從 0~0x1f，0 為熄滅。
+ nn = fe 會內部記憶目前亮度後熄滅，若原本為 0 不記憶。
+ nn = ff 會試圖恢復已記憶的亮度，若若原本為 0 則設定成最亮(0x1f)。
+ {c701ff}  為輸入不完全。
+ {c701bb} 指令成功。bb 為記憶的亮度。
+

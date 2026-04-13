@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include "IndicatorLight.h"
 #include "driver/uart.h"
+#include <stdio.h>
 
 void uart2_send(char * buf)
 {
@@ -79,6 +80,18 @@ void IndicatorLight::setState(IndicatorState state)
 {
     m_state = state;
     xTaskNotify(m_taskHandle, 1, eSetBits);
+}
+
+void IndicatorLight::setColor(uint8_t red, uint8_t green, uint8_t blue)
+{
+    // {81nnxdddd..}
+    // 81: set LED register
+    // nn: byte count (04 for one LED register: R,G,B,Power)
+    // x : start LED index (0)
+    // dddd..: data bytes = RR GG BB PP
+    char buf[32];
+    sprintf(buf, "{81040%02X%02X%02X1F}", red, green, blue);
+    uart2_send(buf);
 }
 
 IndicatorState IndicatorLight::getState()

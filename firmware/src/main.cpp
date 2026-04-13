@@ -7,6 +7,7 @@
 #include <esp_task_wdt.h>
 #include <esp_heap_caps.h>
 #include <time.h>
+#include <stdlib.h>
 #include "I2SMicSampler.h"
 #include "ADCSampler.h"
 #include "I2SOutput.h"
@@ -87,6 +88,7 @@ i2s_pin_config_t i2s_speaker_pins = {
 
 static Preferences g_wifiPrefs;
 static Preferences g_openaiPrefs;
+static Preferences g_heartbeatPrefs;
 static String g_uartInputLine;
 static String g_openaiApiKey;
 static IndicatorLight *g_indicatorLight = nullptr;
@@ -94,6 +96,7 @@ static Speaker *g_speaker = nullptr;
 static OpenAILLM *g_llm = nullptr;
 static const uint32_t HEARTBEAT_INTERVAL_MS = 60UL * 1000UL;
 static uint32_t g_lastHeartbeatAtMs = 0;
+static bool g_heartbeatEnabled = true;
 
 static String trimCopy(const String &in);
 static String llmToolHandler(const String &reply);
@@ -116,6 +119,11 @@ static String readHeartbeatMarkdownFromFs()
 static void sendHeartbeatToLlmIfDue()
 {
   if (g_llm == nullptr)
+  {
+    return;
+  }
+
+  if (!g_heartbeatEnabled)
   {
     return;
   }
@@ -290,6 +298,23 @@ static void clearOpenAIKey()
   g_openaiPrefs.end();
 }
 
+// --- Heartbeat status NVS helpers ---
+
+static void loadHeartbeatStatus()
+{
+  g_heartbeatPrefs.begin("heartbeat", true);
+  g_heartbeatEnabled = g_heartbeatPrefs.getBool("enabled", true);
+  g_heartbeatPrefs.end();
+}
+
+static bool saveHeartbeatStatus(bool enabled)
+{
+  g_heartbeatPrefs.begin("heartbeat", false);
+  bool ok = g_heartbeatPrefs.putBool("enabled", enabled);
+  g_heartbeatPrefs.end();
+  return ok;
+}
+
 static void processWifiUartCommand(const String &line)
 {
   String command = trimCopy(line);
@@ -377,6 +402,57 @@ static void processLedUartCommand(const String &line)
     Serial.println("  LED ON");
     Serial.println("  LED OFF");
     Serial.println("  LED PULSE");
+    Serial.println("  LED COLOR <R> <G> <B>  - set LED RGB color (0-255 or 0x00-0xFF)");
+    return;
+  }
+
+  if (command.startsWith("LED COLOR "))
+  {
+    String payload = command.substring(strlen("LED COLOR "));
+    payload.trim();
+
+    int firstSpace = payload.indexOf(' ');
+    int lastSpace = payload.lastIndexOf(' ');
+    if (firstSpace <= 0 || lastSpace <= firstSpace)
+    {
+      Serial.println("Invalid format. Use: LED COLOR <R> <G> <B>");
+      return;
+    }
+
+    String rToken = trimCopy(payload.substring(0, firstSpace));
+    String gToken = trimCopy(payload.substring(firstSpace + 1, lastSpace));
+    String bToken = trimCopy(payload.substring(lastSpace + 1));
+
+    char *endPtr = nullptr;
+    long r = strtol(rToken.c_str(), &endPtr, 0);
+    if (endPtr == rToken.c_str() || *endPtr != '\0')
+    {
+      Serial.println("Invalid R value. Use 0-255 or 0x00-0xFF");
+      return;
+    }
+
+    long g = strtol(gToken.c_str(), &endPtr, 0);
+    if (endPtr == gToken.c_str() || *endPtr != '\0')
+    {
+      Serial.println("Invalid G value. Use 0-255 or 0x00-0xFF");
+      return;
+    }
+
+    long b = strtol(bToken.c_str(), &endPtr, 0);
+    if (endPtr == bToken.c_str() || *endPtr != '\0')
+    {
+      Serial.println("Invalid B value. Use 0-255 or 0x00-0xFF");
+      return;
+    }
+
+    if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255)
+    {
+      Serial.println("RGB values must be in range 0-255.");
+      return;
+    }
+
+    g_indicatorLight->setColor(static_cast<uint8_t>(r), static_cast<uint8_t>(g), static_cast<uint8_t>(b));
+    Serial.printf("LED color set to R=%ld G=%ld B=%ld\n", r, g, b);
     return;
   }
 
@@ -500,10 +576,37 @@ static void processLlmUartCommand(const String &line)
     Serial.println("  LLM1 <text>           – single-turn chat (no history)");
     Serial.println("  LLM2 <text>           – multi-turn chat (with history)");
     Serial.println("  LLM3 <text>           – multi-turn chat with tool use (write files)");
+    Serial.println("  LLM HEARTBEAT START   – enable periodic heartbeat to LLM");
+    Serial.println("  LLM HEARTBEAT STOP    – disable periodic heartbeat to LLM");
     Serial.println("  LLM SYSTEM <prompt>   – set the system prompt");
     Serial.println("  LLM MODEL <name>      – change the model (e.g. gpt-4o)");
     Serial.println("  LLM RESET             – clear multi-turn conversation history");
     Serial.println("  LLM HELP              – show this help");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("LLM HEARTBEAT START"))
+  {
+    g_heartbeatEnabled = true;
+    g_lastHeartbeatAtMs = millis();
+    if (!saveHeartbeatStatus(true))
+    {
+      Serial.println("LLM heartbeat started, but failed to persist status.");
+      return;
+    }
+    Serial.println("LLM heartbeat started (persisted).");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("LLM HEARTBEAT STOP"))
+  {
+    g_heartbeatEnabled = false;
+    if (!saveHeartbeatStatus(false))
+    {
+      Serial.println("LLM heartbeat stopped, but failed to persist status.");
+      return;
+    }
+    Serial.println("LLM heartbeat stopped (persisted).");
     return;
   }
 
@@ -811,6 +914,10 @@ void setup()
   loadOpenAIKey();
   Serial.printf("OpenAI API key: %s...\n", g_openaiApiKey.substring(0, 8).c_str());
 
+  // Load heartbeat status from NVS (default: enabled)
+  loadHeartbeatStatus();
+  Serial.printf("LLM heartbeat persisted status: %s\n", g_heartbeatEnabled ? "enabled" : "disabled");
+
   g_llm = new OpenAILLM(OPENAI_API_KEY, OPENAI_LLM_MODEL);
   g_llm->setApiKey(g_openaiApiKey.c_str());
   g_speaker->tts()->setApiKey(g_openaiApiKey.c_str());
@@ -818,6 +925,8 @@ void setup()
   // indicator light to show when we are listening
   IndicatorLight *indicator_light = new IndicatorLight();
   g_indicatorLight = indicator_light;
+  g_indicatorLight->setColor(255, 0, 0);
+  Serial.println("LED initial color set to RED.");
 
   // --- Skill system initialization ---
   // 1. Scan LittleFS for skill definitions (SKILL.md files)

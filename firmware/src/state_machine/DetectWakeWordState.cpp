@@ -62,7 +62,7 @@ bool DetectWakeWordState::run()
     if (m_number_of_runs == 100)
     {
         m_number_of_runs = 0;
-        Serial.printf("Average detection time %.fms\n", m_average_detect_time);
+        //Serial.printf("Average detection time %.fms\n", m_average_detect_time);
     }
     // use quite a high threshold to prevent false positives
     if (output > 0.95)
