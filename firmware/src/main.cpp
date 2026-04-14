@@ -174,6 +174,7 @@ void setup()
   // Part 1 + Part 3: print memory status BEFORE allocation
   printMemoryStatus("=== Before Allocation ===");
 
+#ifdef HW2
   // ── Part 2: Allocate different memory types ───────────────────────────────
   // Each call uses heap_caps_malloc(size, capability) to request memory
   // from a specific region. NULL is returned if the region has no space.
@@ -204,6 +205,7 @@ void setup()
   // Part 3: print memory status AFTER allocation to observe the change
   // Key observation: Internal largest should drop significantly (fragmentation)
   printMemoryStatus("=== After Allocation ===");
+#endif // HW2
 
   // startup SPIFFS for the wav files
   SPIFFS.begin();
