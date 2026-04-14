@@ -402,7 +402,55 @@ static void processLedUartCommand(const String &line)
     Serial.println("  LED ON");
     Serial.println("  LED OFF");
     Serial.println("  LED PULSE");
+    Serial.println("  LED DUMP  - dump current LED state/color and Micron battery status");
     Serial.println("  LED COLOR <R> <G> <B>  - set LED RGB color (0-255 or 0x00-0xFF)");
+    return;
+  }
+
+  if (command.equalsIgnoreCase("LED DUMP"))
+  {
+    const char *stateName = "UNKNOWN";
+    IndicatorState state = g_indicatorLight->getState();
+    switch (state)
+    {
+    case OFF:
+      stateName = "OFF";
+      break;
+    case ON:
+      stateName = "ON";
+      break;
+    case PULSING:
+      stateName = "PULSING";
+      break;
+    default:
+      break;
+    }
+
+    uint8_t r = 0;
+    uint8_t g = 0;
+    uint8_t b = 0;
+    g_indicatorLight->getColor(r, g, b);
+
+    uint8_t statusFlags = 0;
+    uint16_t batteryRaw = 0;
+    bool micronOk = g_indicatorLight->getMicronStatus(statusFlags, batteryRaw);
+
+    Serial.println("LED status dump:");
+    Serial.printf("  state: %s\n", stateName);
+    Serial.printf("  color: R=%u G=%u B=%u\n", static_cast<unsigned>(r), static_cast<unsigned>(g), static_cast<unsigned>(b));
+    if (micronOk)
+    {
+      Serial.printf("  micron flags: 0x%02X\n", static_cast<unsigned>(statusFlags));
+      Serial.printf("    test mode: %s\n", (statusFlags & 0x02) ? "ON" : "OFF");
+      Serial.printf("    locked: %s\n", (statusFlags & 0x08) ? "YES" : "NO");
+      Serial.printf("    led reg changed: %s\n", (statusFlags & 0x10) ? "YES" : "NO");
+      Serial.printf("    long press: %s\n", (statusFlags & 0x20) ? "YES" : "NO");
+      Serial.printf("  battery raw: %u (0x%04X)\n", static_cast<unsigned>(batteryRaw), static_cast<unsigned>(batteryRaw));
+    }
+    else
+    {
+      Serial.println("  micron status: read failed");
+    }
     return;
   }
 
