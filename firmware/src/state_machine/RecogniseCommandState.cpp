@@ -26,8 +26,8 @@ RecogniseCommandState::RecogniseCommandState(I2SSampler *sample_provider, Indica
 }
 void RecogniseCommandState::enterState()
 {
-    // indicate that we are now recording audio
-    m_indicator_light->setState(ON);
+    // for hw3 modified: LED already ON from Application at wake word detection
+    // m_indicator_light->setState(ON);  // original: turned on here
     m_speaker->playReady();
 
     // stash the start time - we will limit ourselves to 5 seconds of data
@@ -91,8 +91,8 @@ bool RecogniseCommandState::run()
         m_start_time = current_time;
         if (m_elapsed_time > 3000)
         {
-            // indicate that we are now trying to understand the command
-            m_indicator_light->setState(PULSING);
+            // for hw3 modified: keep LED ON during recognition (no PULSING)
+            // m_indicator_light->setState(PULSING);  // original: pulsed here
 
             // all done, move to next state
             Serial.println("3 seconds has elapsed - finishing recognition request");

@@ -26,7 +26,10 @@ private:
     uint8_t *m_tensor_arena;
 
 public:
-    NeuralNetwork();
+    NeuralNetwork();                                       // uses built-in converted_model_tflite (wake word)
+    // for hw3 modified: accepts any model data so DetectRecordWordState can
+    // load model_recordword without a separate NeuralNetwork subclass
+    NeuralNetwork(const unsigned char *model_data);
     ~NeuralNetwork();
     float *getInputBuffer();
     float predict();

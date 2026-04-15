@@ -79,3 +79,36 @@ IndicatorState IndicatorLight::getState()
 {
     return m_state;
 }
+
+// for hw3 modified: blocking blink ───────────────────────────────────────────
+// Writes directly to the PWM channel so timing is precise and synchronous.
+// Does NOT go through indicatorLedTask to avoid async scheduling gaps.
+// After blinking, LED is left OFF and m_state is updated accordingly.
+void IndicatorLight::blink(int times)
+{
+    // for hw3 modified: use setState() so it goes through indicatorLedTask,
+    // exactly like normal ON/OFF state changes
+    for (int i = 0; i < times; i++)
+    {
+        setState(ON);
+        vTaskDelay(pdMS_TO_TICKS(500));
+        setState(OFF);
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+}
+// for hw3 modified: blocking blink in blue via RGB LED on UART2 ───────────────
+// Uses direct uart2_send so color is precise and synchronous.
+// Command format: {81041RRGGBBFF}
+//   blue on  = {810410000ffff}  (R=00, G=00, B=ff)
+//   RGB off  = {81041000000ff}  (R=00, G=00, B=00)
+void IndicatorLight::blinkBlue(int times)
+{
+    for (int i = 0; i < times; i++)
+    {
+        uart2_send((char *)"{810410000ffff}");   // blue ON
+        vTaskDelay(pdMS_TO_TICKS(150));        
+        uart2_send((char *)"{8701fe}");          // OFF (same as setState(OFF))
+        vTaskDelay(pdMS_TO_TICKS(150));
+    }
+}
+// ─────────────────────────────────────────────────────────────────────────────

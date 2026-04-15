@@ -6,12 +6,23 @@
 
 void I2SSampler::addSample(int16_t sample)
 {
-    // store the sample
+    // store the sample in the circular ring buffer (wake-word pipeline)
     m_write_ring_buffer_accessor->setCurrentSample(sample);
     if (m_write_ring_buffer_accessor->moveToNextSample())
     {
         // trigger the processor task as we've filled a buffer
         xTaskNotify(m_processor_task_handle, 1, eSetBits);
+    }
+
+    // for hw3 modified: if recording hook is armed, also copy into flat buffer
+    if (m_record_active && m_record_count < m_record_max)
+    {
+        m_record_buf[m_record_count++] = sample;
+        // auto-disarm when buffer is full
+        if (m_record_count >= m_record_max)
+        {
+            m_record_active = false;
+        }
     }
 }
 
@@ -50,7 +61,30 @@ I2SSampler::I2SSampler()
         m_audio_buffers[i] = new AudioBuffer();
     }
     m_write_ring_buffer_accessor = new RingBufferAccessor(m_audio_buffers, AUDIO_BUFFER_COUNT);
+
+    // for hw3 modified: recording hook is idle until startRecording() is called
+    m_record_buf    = nullptr;
+    m_record_max    = 0;
+    m_record_count  = 0;
+    m_record_active = false;
 }
+
+// for hw3 modified: arm the recording hook ───────────────────────────────────
+void I2SSampler::startRecording(int16_t *buf, int max_samples)
+{
+    m_record_buf    = buf;
+    m_record_max    = max_samples;
+    m_record_count  = 0;       // reset so previous data is overwritten
+    m_record_active = true;    // arm — addSample() starts copying from here
+}
+
+// for hw3 modified: disarm the hook and return number of samples captured ────
+int I2SSampler::stopRecording()
+{
+    m_record_active = false;
+    return m_record_count;
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 void I2SSampler::start(i2s_port_t i2s_port, i2s_config_t &i2s_config, TaskHandle_t processor_task_handle)
 {

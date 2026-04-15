@@ -29,6 +29,17 @@ private:
     // i2s port
     i2s_port_t m_i2s_port;
 
+    // for hw3 modified: direct recording hook ────────────────────────────────
+    // When m_record_active is true, addSample() copies every incoming sample
+    // into m_record_buf in addition to the ring buffer.  All fields are
+    // volatile because they are written from loop()/applicationTask and read
+    // from the I2S reader task.
+    volatile int16_t *m_record_buf;
+    volatile int      m_record_max;
+    volatile int      m_record_count;
+    volatile bool     m_record_active;
+    // ─────────────────────────────────────────────────────────────────────────
+
 protected:
     void addSample(int16_t sample);
     virtual void configureI2S() = 0;
@@ -52,6 +63,17 @@ public:
     {
         return AUDIO_BUFFER_COUNT * SAMPLE_BUFFER_SIZE;
     }
+
+    // for hw3 modified: recording control API ─────────────────────────────────
+    // startRecording: arm hook; buf must stay valid until stopRecording()
+    void startRecording(int16_t *buf, int max_samples);
+    // stopRecording: disarm hook; returns number of samples captured
+    int  stopRecording();
+    // isRecording: true while hook is active (also auto-disarms when buf full)
+    bool isRecording()     const { return m_record_active; }
+    // recordedSamples: how many samples captured so far (safe to poll)
+    int  recordedSamples() const { return m_record_count;  }
+    // ─────────────────────────────────────────────────────────────────────────
 
     friend void i2sReaderTask(void *param);
 };

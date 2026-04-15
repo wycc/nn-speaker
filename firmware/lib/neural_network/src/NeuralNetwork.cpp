@@ -22,6 +22,7 @@ NeuralNetwork::NeuralNetwork()
     TF_LITE_REPORT_ERROR(m_error_reporter, "Loading model");
 
     m_model = tflite::GetModel(converted_model_tflite);
+
     if (m_model->version() != TFLITE_SCHEMA_VERSION)
     {
         TF_LITE_REPORT_ERROR(m_error_reporter, "Model provided is schema version %d not equal to supported version %d.",
@@ -57,6 +58,55 @@ NeuralNetwork::NeuralNetwork()
 
     // Obtain pointers to the model's input and output tensors.
     input = m_interpreter->input(0);
+    output = m_interpreter->output(0);
+}
+
+// for hw3 modified: identical to default constructor but loads any model data
+// pointer passed in — used by DetectRecordWordState to load model_recordword.
+NeuralNetwork::NeuralNetwork(const unsigned char *model_data)
+{
+    m_error_reporter = new tflite::MicroErrorReporter();
+
+    m_tensor_arena = (uint8_t *)malloc(kArenaSize);
+    if (!m_tensor_arena)
+    {
+        TF_LITE_REPORT_ERROR(m_error_reporter, "Could not allocate arena");
+        return;
+    }
+    TF_LITE_REPORT_ERROR(m_error_reporter, "Loading model (custom)");
+
+    m_model = tflite::GetModel(model_data);
+    if (m_model->version() != TFLITE_SCHEMA_VERSION)
+    {
+        TF_LITE_REPORT_ERROR(m_error_reporter, "Model schema version %d != supported %d.",
+                             m_model->version(), TFLITE_SCHEMA_VERSION);
+        return;
+    }
+    m_resolver = new tflite::MicroMutableOpResolver<10>();
+    m_resolver->AddConv2D();
+    m_resolver->AddMaxPool2D();
+    m_resolver->AddFullyConnected();
+    m_resolver->AddMul();
+    m_resolver->AddAdd();
+    m_resolver->AddLogistic();
+    m_resolver->AddReshape();
+    m_resolver->AddQuantize();
+    m_resolver->AddDequantize();
+
+    m_interpreter = new tflite::MicroInterpreter(
+        m_model, *m_resolver, m_tensor_arena, kArenaSize, m_error_reporter);
+
+    TfLiteStatus allocate_status = m_interpreter->AllocateTensors();
+    if (allocate_status != kTfLiteOk)
+    {
+        TF_LITE_REPORT_ERROR(m_error_reporter, "AllocateTensors() failed");
+        return;
+    }
+
+    size_t used_bytes = m_interpreter->arena_used_bytes();
+    TF_LITE_REPORT_ERROR(m_error_reporter, "Used bytes %d\n", used_bytes);
+
+    input  = m_interpreter->input(0);
     output = m_interpreter->output(0);
 }
 

@@ -18,6 +18,11 @@ public:
     IndicatorLight();
     void setState(IndicatorState state);
     IndicatorState getState();
+    // for hw3 modified: blocking blink — turns LED on/off N times
+    void blink(int times);
+    // for hw3 modified: blocking blink in blue color via RGB LED (UART2)
+    // format: {81041RRGGBBFF} — blue = {810410000ffff}, off = {81041000000ff}
+    void blinkBlue(int times);
 };
 
 #endif

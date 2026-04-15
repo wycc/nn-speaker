@@ -1,6 +1,8 @@
 #ifndef _speaker_h_
 #define _speaker_h_
 
+#include <stdint.h>  // for hw3 modified: needed for int16_t in playRecording()
+
 class I2SOutput;
 class WAVFileReader;
 
@@ -22,6 +24,10 @@ public:
     ~Speaker();
     void playOK();
     void playReady();
+    // for hw3 modified: play back a raw PCM recording through the speaker
+    // samples     — int16_t buffer from AudioRecorder::getSamples()
+    // sample_count — AudioRecorder::getSampleCount()
+    void playRecording(const int16_t *samples, int sample_count);
     void playCantDo();
     void playLightOn();
     void playLightOff();

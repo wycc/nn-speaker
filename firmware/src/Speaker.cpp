@@ -1,6 +1,7 @@
 #include "Speaker.h"
 #include "I2SOutput.h"
 #include "WAVFileReader.h"
+#include "RecordedAudioSource.h" // for hw3 modified: needed for playRecording()
 
 Speaker::Speaker(I2SOutput *i2s_output)
 {
@@ -74,3 +75,37 @@ void Speaker::playLife()
     m_life->reset();
     m_i2s_output->setSampleGenerator(m_life);
 }
+
+// for hw3 modified: play back recorded PCM audio ──────────────────────────────
+// Step 1 — wrap the raw buffer in a SampleSource (no copy, just a pointer).
+// Step 2 — hand it to I2SOutput; the i2sWriterTask calls getFrames() in a loop.
+// Step 3 — wait for playback duration + 500 ms margin.
+//           The +500 ms margin exists because setSampleGenerator() is async:
+//           the i2sWriterTask may still be finishing a DMA buffer when we call
+//           it, so the first getFrames() call could be delayed by up to one
+//           buffer period.  Without margin the tail of the recording is cut off.
+// Step 4 — detach source so the writer task stops using the pointer.
+// Step 5 — give the writer task one buffer period (~20 ms) to finish any
+//           in-progress getFrames() call before we free the object.
+void Speaker::playRecording(const int16_t *samples, int sample_count)
+{
+    if (!samples || sample_count <= 0) return;
+
+    RecordedAudioSource *source = new RecordedAudioSource(samples, sample_count);
+
+    // Step 2
+    m_i2s_output->setSampleGenerator(source);
+
+    // Step 3: actual duration + safety margin
+    uint32_t playback_ms = (uint32_t)(1000UL * sample_count / 16000) + 500;
+    vTaskDelay(pdMS_TO_TICKS(playback_ms));
+
+    // Step 4: detach before deleting so writer task never uses a freed pointer
+    m_i2s_output->setSampleGenerator(nullptr);
+
+    // Step 5: one DMA buffer period safety gap
+    vTaskDelay(pdMS_TO_TICKS(20));
+
+    delete source;
+}
+// ─────────────────────────────────────────────────────────────────────────────
