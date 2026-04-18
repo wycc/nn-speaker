@@ -14,13 +14,14 @@ Application::Application(I2SSampler *sample_provider, IntentProcessor *intent_pr
     m_recognise_command_state = new RecogniseCommandState(sample_provider, indicator_light, speaker, intent_processor);
     // start off in the detecting wakeword state
     m_current_state = m_detect_wake_word_state;
+    m_current_state_kind = STATE_DETECT;
     m_current_state->enterState();
     m_speaker = speaker;
 
 }
 
 // process the next batch of samples
-void Application::run()
+bool Application::run()
 {
     bool state_done = m_current_state->run();
     if (state_done)
@@ -30,14 +31,22 @@ void Application::run()
         if (m_current_state == m_detect_wake_word_state)
         {
             m_current_state = m_recognise_command_state;
+            m_current_state_kind = STATE_RECOGNISE;
             //m_current_state = m_detect_wake_word_state;
             m_speaker->playOK();
         }
         else
         {
             m_current_state = m_detect_wake_word_state;
+            m_current_state_kind = STATE_DETECT;
         }
         m_current_state->enterState();
     }
     vTaskDelay(10);
+    return state_done;
+}
+
+bool Application::isInRecogniseState() const
+{
+    return m_current_state_kind == STATE_RECOGNISE;
 }

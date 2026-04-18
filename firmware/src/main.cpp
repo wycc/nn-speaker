@@ -77,6 +77,8 @@ i2s_pin_config_t i2s_speaker_pins = {
     .data_out_num = I2S_SPEAKER_SERIAL_DATA,
     .data_in_num = I2S_PIN_NO_CHANGE};
 
+static IndicatorLight *g_indicator_light = nullptr;
+
 void es8388_init(void)
 {
     audiokit::AudioKit kit;
@@ -93,6 +95,14 @@ void applicationTask(void *param)
 {
   Application *application = static_cast<Application *>(param);
 
+  // 等待 wake word 時 LED 必須 OFF
+  if (g_indicator_light)
+  {
+    g_indicator_light->setState(OFF);
+  }
+
+  bool was_in_recognise_state = application->isInRecogniseState();
+
   const TickType_t xMaxBlockTime = pdMS_TO_TICKS(100);
   while (true)
   {
@@ -101,6 +111,26 @@ void applicationTask(void *param)
     if (ulNotificationValue > 0)
     {
       application->run();
+
+      bool is_in_recognise_state = application->isInRecogniseState();
+      // Detect -> Recognise：偵測到 wake word 當下立刻亮燈
+      if (!was_in_recognise_state && is_in_recognise_state)
+      {
+        if (g_indicator_light)
+        {
+          g_indicator_light->setState(ON);
+        }
+      }
+      // Recognise -> Detect：流程結束（成功/失敗/錯誤）一律滅燈
+      else if (was_in_recognise_state && !is_in_recognise_state)
+      {
+        if (g_indicator_light)
+        {
+          g_indicator_light->setState(OFF);
+        }
+      }
+
+      was_in_recognise_state = is_in_recognise_state;
     }
   }
 }
@@ -154,8 +184,8 @@ void setup()
   i2s_output->start(I2S_NUM_0, i2s_codec_pins, i2sCodecConfig);
   Speaker *speaker = new Speaker(i2s_output);
 
-  // indicator light to show when we are listening
-  IndicatorLight *indicator_light = new IndicatorLight();
+  // indicator light 由 main/task 單一來源控制
+  g_indicator_light = new IndicatorLight();
 
   // and the intent processor
   IntentProcessor *intent_processor = new IntentProcessor(speaker);
@@ -166,7 +196,7 @@ void setup()
   */
 
   // create our application
-  Application *application = new Application(i2s_sampler, intent_processor, speaker, indicator_light);
+  Application *application = new Application(i2s_sampler, intent_processor, speaker, g_indicator_light);
 
   // set up the i2s sample writer task
   TaskHandle_t applicationTaskHandle;

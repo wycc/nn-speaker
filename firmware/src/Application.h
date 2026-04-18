@@ -13,15 +13,23 @@ class IntentProcessor;
 class Application
 {
 private:
+    enum AppStateKind
+    {
+        STATE_DETECT,
+        STATE_RECOGNISE
+    };
+
     State *m_detect_wake_word_state;
     State *m_recognise_command_state;
     State *m_current_state;
     Speaker *m_speaker;
+    AppStateKind m_current_state_kind;
 
 public:
     Application(I2SSampler *sample_provider, IntentProcessor *intent_processor, Speaker *speaker, IndicatorLight *indicator_light);
     ~Application();
-    void run();
+    bool run();
+    bool isInRecogniseState() const;
 };
 
 #endif
