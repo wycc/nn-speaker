@@ -18,6 +18,9 @@ private:
     State *m_current_state;
     Speaker *m_speaker;
 
+    // ⭐ 新增這行（控制LED）
+    IndicatorLight *m_indicator_light;
+
 public:
     Application(I2SSampler *sample_provider, IntentProcessor *intent_processor, Speaker *speaker, IndicatorLight *indicator_light);
     ~Application();
