@@ -80,7 +80,7 @@ bool DetectWakeWordState::run()
             Serial.printf("Free ram after DetectWakeWord cleanup %d\n", free_ram);
 
             // detected the wake word in several runs, move to the next state
-            Serial.printf("P(%.2f): Here I am, brain the size of a planet...\n", output);
+            Serial.printf("P(%.2f): Wake word 'on' detected!\n", output);
 
             // LED on when wake word detected
             m_indicator_light->setState(ON);
