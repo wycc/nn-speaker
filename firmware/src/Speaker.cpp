@@ -1,6 +1,7 @@
 #include "Speaker.h"
 #include "I2SOutput.h"
 #include "WAVFileReader.h"
+#include "RAMSampleSource.h"
 
 Speaker::Speaker(I2SOutput *i2s_output)
 {
@@ -16,6 +17,7 @@ Speaker::Speaker(I2SOutput *i2s_output)
     m_jokes[2] = new WAVFileReader("/joke2.wav");
     m_jokes[3] = new WAVFileReader("/joke3.wav");
     m_jokes[4] = new WAVFileReader("/joke4.wav");
+    m_ram_source = new RAMSampleSource();
 }
 
 Speaker::~Speaker()
@@ -31,6 +33,7 @@ Speaker::~Speaker()
     delete m_jokes[2];
     delete m_jokes[3];
     delete m_jokes[4];
+    delete m_ram_source;
 }
 
 void Speaker::playOK()
@@ -73,4 +76,15 @@ void Speaker::playLife()
 {
     m_life->reset();
     m_i2s_output->setSampleGenerator(m_life);
+}
+
+void Speaker::playRecordedAudio(const int16_t *samples, int sample_count)
+{
+    m_ram_source->setBuffer(samples, sample_count);
+    m_i2s_output->setSampleGenerator(m_ram_source);
+}
+
+bool Speaker::isPlaying() const
+{
+    return m_i2s_output->isPlaying();
 }

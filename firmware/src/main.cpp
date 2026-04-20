@@ -77,6 +77,8 @@ i2s_pin_config_t i2s_speaker_pins = {
     .data_out_num = I2S_SPEAKER_SERIAL_DATA,
     .data_in_num = I2S_PIN_NO_CHANGE};
 
+static IndicatorLight *g_indicator_light = nullptr;
+
 void es8388_init(void)
 {
     audiokit::AudioKit kit;
@@ -101,6 +103,13 @@ void applicationTask(void *param)
     if (ulNotificationValue > 0)
     {
       application->run();
+      if (g_indicator_light)
+      {
+        Application::AppPhase phase = application->getPhase();
+        const IndicatorState led_state =
+            (phase == Application::PHASE_RECORD || phase == Application::PHASE_PLAYBACK) ? ON : OFF;
+        g_indicator_light->setState(led_state);
+      }
     }
   }
 }
@@ -154,8 +163,8 @@ void setup()
   i2s_output->start(I2S_NUM_0, i2s_codec_pins, i2sCodecConfig);
   Speaker *speaker = new Speaker(i2s_output);
 
-  // indicator light to show when we are listening
-  IndicatorLight *indicator_light = new IndicatorLight();
+  // indicator light 由 main/task 單一來源控制
+  g_indicator_light = new IndicatorLight();
 
   // and the intent processor
   IntentProcessor *intent_processor = new IntentProcessor(speaker);
@@ -166,7 +175,7 @@ void setup()
   */
 
   // create our application
-  Application *application = new Application(i2s_sampler, intent_processor, speaker, indicator_light);
+  Application *application = new Application(i2s_sampler, intent_processor, speaker, g_indicator_light);
 
   // set up the i2s sample writer task
   TaskHandle_t applicationTaskHandle;

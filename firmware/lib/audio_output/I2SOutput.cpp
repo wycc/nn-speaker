@@ -34,12 +34,14 @@ void i2sWriterTask(void *param)
                         // get some frames from the wave file - a frame consists of a 16 bit left and right sample
                         if (output->m_sample_generator && output->m_sample_generator->available())
                         {
+                            output->m_is_playing = true;
                             int frames_available = output->m_sample_generator->getFrames(frames, NUM_FRAMES_TO_SEND);
                             // how maby bytes do we now have to send
                             availableBytes = frames_available * sizeof(uint32_t);
                         }
                         else
                         {
+                            output->m_is_playing = false;
                             // no sample generator available - just send silence
                             for (int i = 0; i < NUM_FRAMES_TO_SEND; i++)
                             {
@@ -97,4 +99,10 @@ void I2SOutput::start(i2s_port_t i2sPort, i2s_pin_config_t &i2sPins, i2s_config_
 void I2SOutput::setSampleGenerator(SampleSource *sample_generator)
 {
     m_sample_generator = sample_generator;
+    m_is_playing = (sample_generator != NULL);
+}
+
+bool I2SOutput::isPlaying() const
+{
+    return m_is_playing;
 }
