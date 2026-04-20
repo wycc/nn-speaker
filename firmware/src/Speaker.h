@@ -1,8 +1,11 @@
 #ifndef _speaker_h_
 #define _speaker_h_
 
+#include <stdint.h>
+
 class I2SOutput;
 class WAVFileReader;
+class RAMSampleSource;
 
 class Speaker
 {
@@ -14,6 +17,7 @@ private:
     WAVFileReader *m_light_off;
     WAVFileReader *m_life;
     WAVFileReader *m_jokes[5];
+    RAMSampleSource *m_ram_source;
 
     I2SOutput *m_i2s_output;
 
@@ -27,6 +31,8 @@ public:
     void playLightOff();
     void playRandomJoke();
     void playLife();
+    void playRecordedAudio(const int16_t *samples, int sample_count);
+    bool isPlaying() const;
 };
 
 #endif

@@ -95,14 +95,6 @@ void applicationTask(void *param)
 {
   Application *application = static_cast<Application *>(param);
 
-  // 等待 wake word 時 LED 必須 OFF
-  if (g_indicator_light)
-  {
-    g_indicator_light->setState(OFF);
-  }
-
-  bool was_in_recognise_state = application->isInRecogniseState();
-
   const TickType_t xMaxBlockTime = pdMS_TO_TICKS(100);
   while (true)
   {
@@ -111,26 +103,13 @@ void applicationTask(void *param)
     if (ulNotificationValue > 0)
     {
       application->run();
-
-      bool is_in_recognise_state = application->isInRecogniseState();
-      // Detect -> Recognise：偵測到 wake word 當下立刻亮燈
-      if (!was_in_recognise_state && is_in_recognise_state)
+      if (g_indicator_light)
       {
-        if (g_indicator_light)
-        {
-          g_indicator_light->setState(ON);
-        }
+        Application::AppPhase phase = application->getPhase();
+        const IndicatorState led_state =
+            (phase == Application::PHASE_RECORD || phase == Application::PHASE_PLAYBACK) ? ON : OFF;
+        g_indicator_light->setState(led_state);
       }
-      // Recognise -> Detect：流程結束（成功/失敗/錯誤）一律滅燈
-      else if (was_in_recognise_state && !is_in_recognise_state)
-      {
-        if (g_indicator_light)
-        {
-          g_indicator_light->setState(OFF);
-        }
-      }
-
-      was_in_recognise_state = is_in_recognise_state;
     }
   }
 }
