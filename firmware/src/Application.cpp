@@ -8,34 +8,49 @@
 
 Application::Application(I2SSampler *sample_provider, IntentProcessor *intent_processor, Speaker *speaker, IndicatorLight *indicator_light)
 {
-    // detect wake word state - waits for the wake word to be detected
     m_detect_wake_word_state = new DetectWakeWordState(sample_provider);
-    // command recongiser - streams audio to the server for recognition
     m_recognise_command_state = new RecogniseCommandState(sample_provider, indicator_light, speaker, intent_processor);
-    // start off in the detecting wakeword state
     m_current_state = m_detect_wake_word_state;
-    m_current_state->enterState();
     m_speaker = speaker;
+    m_indicator_light = indicator_light;
+    m_recognise_start_time = 0;
 
+    // waiting for wake word: LED OFF
+    m_indicator_light->setState(OFF);
+    m_current_state->enterState();
 }
 
-// process the next batch of samples
 void Application::run()
 {
     bool state_done = m_current_state->run();
+
+    // 5-second LED timeout: force exit from recognise state if stuck
+    if (m_current_state == m_recognise_command_state && m_recognise_start_time > 0)
+    {
+        if (millis() - m_recognise_start_time > 5000)
+        {
+            Serial.println("LED timeout: forcing exit from recognise state");
+            state_done = true;
+        }
+    }
+
     if (state_done)
     {
         m_current_state->exitState();
-        // switch to the next state - very simple state machine so we just go to the other state...
         if (m_current_state == m_detect_wake_word_state)
         {
+            // wake word detected: LED ON immediately
+            m_indicator_light->setState(ON);
             m_current_state = m_recognise_command_state;
-            //m_current_state = m_detect_wake_word_state;
+            m_recognise_start_time = millis();
             m_speaker->playOK();
         }
         else
         {
+            // recognition finished: LED OFF
+            m_indicator_light->setState(OFF);
             m_current_state = m_detect_wake_word_state;
+            m_recognise_start_time = 0;
         }
         m_current_state->enterState();
     }
