@@ -18,6 +18,7 @@ private:
     float m_average_detect_time;
     int m_number_of_detections;
     int m_number_of_runs;
+    int m_cooldown_frames;
 
 public:
     DetectWakeWordState(I2SSampler *sample_provider, IndicatorLight *indicator_light);

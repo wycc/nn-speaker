@@ -28,7 +28,7 @@ void RecogniseCommandState::enterState()
 {
     // indicate that we are now recording audio
     m_indicator_light->setState(ON);
-    m_speaker->playReady();
+    // m_speaker->playReady();
 
     // stash the start time - we will limit ourselves to 5 seconds of data
     m_start_time = millis();

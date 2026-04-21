@@ -35,6 +35,7 @@ void DetectWakeWordState::enterState()
     Serial.println("Created Neural Net");
 
     m_number_of_detections = 0;
+    m_cooldown_frames = 50;
 }
 bool DetectWakeWordState::run()
 {
@@ -69,6 +70,12 @@ bool DetectWakeWordState::run()
     }
     // log every output to debug false positives
     Serial.printf("output=%.4f\n", output);
+    // skip first frames after re-entering to let ring buffer clear
+    if (m_cooldown_frames > 0)
+    {
+        m_cooldown_frames--;
+        return false;
+    }
     // use quite a high threshold to prevent false positives
     if (output > 0.97)
     {
@@ -85,6 +92,10 @@ bool DetectWakeWordState::run()
             m_indicator_light->setState(ON);
             return true;
         }
+    }
+    else
+    {
+        m_number_of_detections = 0;
     }
     // nothing detected stay in the current state
     return false;

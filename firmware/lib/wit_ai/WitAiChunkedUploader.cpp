@@ -74,6 +74,13 @@ Intent WitAiChunkedUploader::getResults()
     }
     Serial.printf("Http status is %d with content length of %d\n", status, content_length);
 
+    if (status != 200)
+    {
+        Serial.println("Non-200 response, skipping body");
+        m_wifi_client->stop();
+        return Intent{};
+    }
+
     String response_body;
     if (content_length > 0)
     {

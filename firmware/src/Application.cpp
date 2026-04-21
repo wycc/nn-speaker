@@ -31,7 +31,7 @@ void Application::run()
         {
             m_current_state = m_recognise_command_state;
             //m_current_state = m_detect_wake_word_state;
-            m_speaker->playOK();
+            // m_speaker->playOK();
         }
         else
         {
