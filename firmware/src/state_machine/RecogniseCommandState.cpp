@@ -1,5 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "I2SSampler.h"
 #include "RingBuffer.h"
 #include "RecogniseCommandState.h"
@@ -9,6 +11,7 @@
 #include "WitAiChunkedUploader.h"
 #include "../config.h"
 #include <string.h>
+#include <string>
 
 #define WINDOW_SIZE 320
 #define STEP_SIZE 160
@@ -27,7 +30,7 @@ RecogniseCommandState::RecogniseCommandState(I2SSampler *sample_provider, Indica
 void RecogniseCommandState::enterState()
 {
     // indicate that we are now recording audio
-    m_indicator_light->setState(ON);
+    //m_indicator_light->setState(ON);
     m_speaker->playReady();
 
     // stash the start time - we will limit ourselves to 5 seconds of data
@@ -91,18 +94,32 @@ bool RecogniseCommandState::run()
         m_start_time = current_time;
         if (m_elapsed_time > 3000)
         {
-            // indicate that we are now trying to understand the command
-            m_indicator_light->setState(PULSING);
+            // indicate that we are still processing (LED stays ON during recognition)
+            m_indicator_light->setState(ON);
 
             // all done, move to next state
             Serial.println("3 seconds has elapsed - finishing recognition request");
             // final new line to finish off the request
             Intent intent = m_speech_recogniser->getResults();
-            IntentResult intentResult = m_intent_processor->processIntent(intent);
+            std::string llmResponseText;
+            IntentResult intentResult = m_intent_processor->processIntent(intent, llmResponseText);
             switch (intentResult)
             {
             case SUCCESS:
-                m_speaker->playOK();
+                if (!llmResponseText.empty())
+                {
+                    Serial.printf("RecogniseCommandState: playing TTS for response (%d chars)\n",
+                                  (int)llmResponseText.size());
+                    if (!m_speaker->playTTS(llmResponseText.c_str()))
+                    {
+                        // TTS failed, fall back to OK sound
+                        m_speaker->playOK();
+                    }
+                }
+                else
+                {
+                    m_speaker->playOK();
+                }
                 break;
             case FAILED:
                 m_speaker->playCantDo();
