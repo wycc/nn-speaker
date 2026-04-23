@@ -75,7 +75,7 @@ IntentResult IntentProcessor::processIntent(const Intent &intent)
     if (intent.text.empty())
     {
         Serial.println("No text recognised");
-        return FAILED;
+        return SILENT_SUCCESS;
     }
     Serial.printf("I heard \"%s\"\n", intent.text.c_str());
 

@@ -28,7 +28,7 @@ void RecogniseCommandState::enterState()
 {
     // indicate that we are now recording audio
     m_indicator_light->setState(ON);
-    m_speaker->playReady();
+    // m_speaker->playReady();
 
     // stash the start time - we will limit ourselves to 5 seconds of data
     m_start_time = millis();
@@ -51,6 +51,7 @@ bool RecogniseCommandState::run()
     {
         // no http client - something went wrong somewhere move to the next state as there's nothing for us to do
         Serial.println("Error - Attempt to run with no http client");
+        m_indicator_light->setState(OFF);
         return true;
     }
     if (m_last_audio_position == -1)
@@ -91,8 +92,8 @@ bool RecogniseCommandState::run()
         m_start_time = current_time;
         if (m_elapsed_time > 3000)
         {
-            // indicate that we are now trying to understand the command
-            m_indicator_light->setState(PULSING);
+            // indicate that we are now trying to understand the command (LED stays ON)
+            m_indicator_light->setState(ON);
 
             // all done, move to next state
             Serial.println("3 seconds has elapsed - finishing recognition request");

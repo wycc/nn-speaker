@@ -6,8 +6,8 @@
 #include "tensorflow/lite/schema/schema_generated.h"
 #include "tensorflow/lite/version.h"
 
-// approximate working size of our model
-const int kArenaSize = 25000;
+// float32 model needs ~85152 bytes, allocate with margin
+const int kArenaSize = 90000;
 
 NeuralNetwork::NeuralNetwork()
 {

@@ -1,11 +1,14 @@
-tensorflow
+# Apple Silicon (arm64) + Python 3.10
+tensorflow==2.14.0
+tensorflow-metal==1.2.0
+tensorflow-io==0.34.0
+numpy<2.0
 matplotlib
 pandas
-numpy
-jupyter
 scipy
-tensorflow-io
 tqdm
-pyaudio
+jupyter
 jupyter_contrib_nbextensions
 jupyter_nbextensions_configurator
+# pyaudio requires: brew install portaudio
+pyaudio
