@@ -1,5 +1,5 @@
 #ifndef _application_h_
-#define _applicaiton_h_
+#define _application_h_
 
 #include "state_machine/States.h"
 
@@ -17,8 +17,6 @@ private:
     State *m_recognise_command_state;
     State *m_current_state;
     Speaker *m_speaker;
-
-    // ⭐ 新增這行（控制LED）
     IndicatorLight *m_indicator_light;
 
 public:
