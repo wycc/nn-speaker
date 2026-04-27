@@ -8,36 +8,43 @@
 
 Application::Application(I2SSampler *sample_provider, IntentProcessor *intent_processor, Speaker *speaker, IndicatorLight *indicator_light)
 {
-    // detect wake word state - waits for the wake word to be detected
     m_detect_wake_word_state = new DetectWakeWordState(sample_provider);
-    // command recongiser - streams audio to the server for recognition
     m_recognise_command_state = new RecogniseCommandState(sample_provider, indicator_light, speaker, intent_processor);
-    // start off in the detecting wakeword state
+
     m_current_state = m_detect_wake_word_state;
     m_current_state->enterState();
-    m_speaker = speaker;
 
+    m_speaker = speaker;
+    m_indicator_light = indicator_light;
+    m_indicator_light->off();
 }
 
-// process the next batch of samples
 void Application::run()
 {
     bool state_done = m_current_state->run();
+
     if (state_done)
     {
         m_current_state->exitState();
-        // switch to the next state - very simple state machine so we just go to the other state...
+
         if (m_current_state == m_detect_wake_word_state)
         {
+            // Wake word detected: LED ON immediately
+            m_indicator_light->on();
+
             m_current_state = m_recognise_command_state;
-            //m_current_state = m_detect_wake_word_state;
             m_speaker->playOK();
         }
         else
         {
+            // Recognition finished: LED OFF
+            m_indicator_light->off();
+
             m_current_state = m_detect_wake_word_state;
         }
+
         m_current_state->enterState();
     }
+
     vTaskDelay(10);
 }
