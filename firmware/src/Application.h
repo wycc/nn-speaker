@@ -17,6 +17,7 @@ private:
     State *m_recognise_command_state;
     State *m_current_state;
     Speaker *m_speaker;
+    IndicatorLight *m_indicator_light;  
 
 public:
     Application(I2SSampler *sample_provider, IntentProcessor *intent_processor, Speaker *speaker, IndicatorLight *indicator_light);
