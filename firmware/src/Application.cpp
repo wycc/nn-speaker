@@ -10,8 +10,8 @@ Application::Application(I2SSampler *sample_provider, IntentProcessor *intent_pr
 {
     // detect wake word state - waits for the wake word to be detected
     m_detect_wake_word_state = new DetectWakeWordState(sample_provider, indicator_light);
-    // command recongiser - streams audio to the server for recognition
-    m_recognise_command_state = new RecogniseCommandState(sample_provider, indicator_light, speaker, intent_processor);
+    // command recogniser - records audio locally to SPIFFS
+    m_recognise_command_state = new RecogniseCommandState(sample_provider, indicator_light, speaker);
     // start off in the detecting wakeword state
     m_current_state = m_detect_wake_word_state;
     m_current_state->enterState();
