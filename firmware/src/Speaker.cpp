@@ -86,11 +86,5 @@ void Speaker::playRecording(const char *file_path)
     m_recording = new WAVFileReader(file_path);
     m_recording->reset();
     m_i2s_output->setSampleGenerator(m_recording);
-    // wait for playback to finish
-    while (m_i2s_output->isPlaying())
-    {
-        vTaskDelay(50 / portTICK_PERIOD_MS);
-    }
-    // play end sound
-    playOK();
+    // nothing to do - playback runs asynchronously
 }
