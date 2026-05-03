@@ -80,7 +80,7 @@ bool DetectWakeWordState::run()
     if (output > 0.97)
     {
         m_number_of_detections++;
-        if (m_number_of_detections > 1)
+        if (m_number_of_detections > 0)
         {
             m_number_of_detections = 0;
             uint32_t free_ram = esp_get_free_heap_size();

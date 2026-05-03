@@ -6,7 +6,7 @@
 #include "IndicatorLight.h"
 #include "Speaker.h"
 
-#define RECORD_SECONDS 3
+#define RECORD_SECONDS 5
 #define SAMPLE_RATE 16000
 #define BITS_PER_SAMPLE 16
 #define NUM_CHANNELS 1
