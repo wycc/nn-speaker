@@ -6,19 +6,22 @@
 class I2SSampler;
 class NeuralNetwork;
 class AudioProcessor;
+class IndicatorLight;
 
 class DetectWakeWordState : public State
 {
 private:
     I2SSampler *m_sample_provider;
+    IndicatorLight *m_indicator_light;
     NeuralNetwork *m_nn;
     AudioProcessor *m_audio_processor;
     float m_average_detect_time;
     int m_number_of_detections;
     int m_number_of_runs;
+    int m_cooldown_frames;
 
 public:
-    DetectWakeWordState(I2SSampler *sample_provider);
+    DetectWakeWordState(I2SSampler *sample_provider, IndicatorLight *indicator_light);
     void enterState();
     bool run();
     void exitState();

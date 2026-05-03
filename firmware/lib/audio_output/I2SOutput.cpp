@@ -98,3 +98,8 @@ void I2SOutput::setSampleGenerator(SampleSource *sample_generator)
 {
     m_sample_generator = sample_generator;
 }
+
+bool I2SOutput::isPlaying()
+{
+    return m_sample_generator != NULL && m_sample_generator->available();
+}

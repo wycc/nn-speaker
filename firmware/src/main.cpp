@@ -135,7 +135,7 @@ void setup()
   Serial.printf("Chip model: %s\n", ESP.getChipModel());
 
   // startup SPIFFS for the wav files
-  SPIFFS.begin();
+  SPIFFS.begin(false, "/spiffs", 15);
   // make sure we don't get killed for our long running tasks
   esp_task_wdt_init(10, false);
 
