@@ -129,6 +129,10 @@ bool RecogniseCommandState::run()
     uint32_t free_ram = esp_get_free_heap_size();
     Serial.printf("Free RAM after save: %u\n", free_ram);
 
+    // play back the recording through the speaker
+    Serial.println("Playing back recording...");
+    m_speaker->playRecording("/recording.wav");
+
     m_indicator_light->setState(OFF);
     return true;
 }

@@ -14,6 +14,7 @@ private:
     WAVFileReader *m_light_off;
     WAVFileReader *m_life;
     WAVFileReader *m_jokes[5];
+    WAVFileReader *m_recording;
 
     I2SOutput *m_i2s_output;
 
@@ -27,6 +28,7 @@ public:
     void playLightOff();
     void playRandomJoke();
     void playLife();
+    void playRecording(const char *file_path);
 };
 
 #endif
