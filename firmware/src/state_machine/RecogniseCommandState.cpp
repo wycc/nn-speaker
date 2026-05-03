@@ -79,13 +79,6 @@ bool RecogniseCommandState::run()
     // 3 seconds elapsed - collect audio from ring buffer and save to SPIFFS
     Serial.println("3 seconds elapsed - saving WAV to SPIFFS");
 
-    if (!SPIFFS.begin(true))
-    {
-        Serial.println("SPIFFS mount failed");
-        m_indicator_light->setState(OFF);
-        return true;
-    }
-
     File wav_file = SPIFFS.open("/recording.wav", FILE_WRITE);
     if (!wav_file)
     {
