@@ -55,6 +55,7 @@ void RecogniseCommandState::enterState()
     m_elapsed_time = 0;
     m_last_audio_position = -1;
 
+    m_speaker->playReady();
     Serial.println("Recording audio to SPIFFS...");
 }
 
