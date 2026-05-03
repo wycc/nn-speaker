@@ -82,9 +82,18 @@ void Speaker::playRecording(const char *file_path)
     if (m_recording)
     {
         delete m_recording;
+        m_recording = NULL;
     }
     m_recording = new WAVFileReader(file_path);
     m_recording->reset();
     m_i2s_output->setSampleGenerator(m_recording);
-    // nothing to do - playback runs asynchronously
+    // wait for playback to finish before releasing the file handle
+    while (m_i2s_output->isPlaying())
+    {
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+    }
+    // close the file handle so SPIFFS can write next recording
+    delete m_recording;
+    m_recording = NULL;
+    m_i2s_output->setSampleGenerator(NULL);
 }
