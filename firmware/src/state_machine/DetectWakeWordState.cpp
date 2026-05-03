@@ -35,7 +35,7 @@ void DetectWakeWordState::enterState()
     Serial.println("Created Neural Net");
 
     m_number_of_detections = 0;
-    m_cooldown_frames = 50;
+    m_cooldown_frames = 20;
 }
 bool DetectWakeWordState::run()
 {
