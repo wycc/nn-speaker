@@ -95,13 +95,14 @@ bool RecogniseCommandState::run()
     RingBufferAccessor *reader = m_sample_provider->getRingBufferReader();
     reader->setIndex(m_last_audio_position);
 
-    int16_t sample_buffer[256];
+    const int BATCH_SIZE = 4096;
+    int16_t *sample_buffer = (int16_t *)malloc(BATCH_SIZE * sizeof(int16_t));
     int remaining = TOTAL_SAMPLES;
     uint32_t bytes_written = 0;
 
     while (remaining > 0)
     {
-        int batch = (remaining < 256) ? remaining : 256;
+        int batch = (remaining < BATCH_SIZE) ? remaining : BATCH_SIZE;
         for (int i = 0; i < batch; i++)
         {
             sample_buffer[i] = reader->getCurrentSample();
@@ -111,6 +112,7 @@ bool RecogniseCommandState::run()
         bytes_written += batch * sizeof(int16_t);
         remaining -= batch;
     }
+    free(sample_buffer);
     delete reader;
 
     // go back and write correct WAV header
