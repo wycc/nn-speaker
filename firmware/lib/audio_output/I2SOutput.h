@@ -28,7 +28,7 @@ public:
     }
     void start(i2s_port_t i2sPort, i2s_pin_config_t &i2sPins, i2s_config_t i2sConfig);
     void setSampleGenerator(SampleSource *sample_generator);
-    bool isPlaying() { return m_sample_generator != NULL && m_sample_generator->available(); }
+    bool isPlaying();
     friend void i2sWriterTask(void *param);
 };
 
