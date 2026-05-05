@@ -1,11 +1,13 @@
 #include "Speaker.h"
 #include "I2SOutput.h"
 #include "WAVFileReader.h"
+#include "../lib/audio_output/RAMSampleSource.h"
 
 Speaker::Speaker(I2SOutput *i2s_output)
 {
     m_i2s_output = i2s_output;
     m_recording = NULL;
+    m_ram_source = NULL;
     m_ok = new WAVFileReader("/ok.wav");
     m_ready_ping = new WAVFileReader("/ready_ping.wav");
     m_cantdo = new WAVFileReader("/cantdo.wav");
@@ -76,24 +78,12 @@ void Speaker::playLife()
     m_i2s_output->setSampleGenerator(m_life);
 }
 
-void Speaker::playRecording(const char *file_path)
+void Speaker::playBuffer(int16_t *buffer, int total_samples)
 {
-    // delete previous recording reader now that playback has long finished
-    if (m_recording)
+    if (m_ram_source)
     {
-        delete m_recording;
-        m_recording = NULL;
+        delete m_ram_source;
     }
-    m_recording = new WAVFileReader(file_path);
-    m_recording->reset();
-    m_i2s_output->setSampleGenerator(m_recording);
-    // wait for playback to finish before releasing the file handle
-    while (m_i2s_output->isPlaying())
-    {
-        vTaskDelay(50 / portTICK_PERIOD_MS);
-    }
-    // close the file handle so SPIFFS can write next recording
-    delete m_recording;
-    m_recording = NULL;
-    m_i2s_output->setSampleGenerator(NULL);
+    m_ram_source = new RAMSampleSource(buffer, total_samples);
+    m_i2s_output->setSampleGenerator(m_ram_source);
 }

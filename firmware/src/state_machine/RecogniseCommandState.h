@@ -2,6 +2,7 @@
 #define _recognise_command_state_h_
 
 #include "States.h"
+#include <stdint.h>
 
 class I2SSampler;
 class IndicatorLight;
@@ -17,6 +18,7 @@ private:
 
     IndicatorLight *m_indicator_light;
     Speaker *m_speaker;
+    int16_t *m_audio_buffer;
 
 public:
     RecogniseCommandState(I2SSampler *sample_provider, IndicatorLight *indicator_light, Speaker *speaker);

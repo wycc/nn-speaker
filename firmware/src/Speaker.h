@@ -3,6 +3,7 @@
 
 class I2SOutput;
 class WAVFileReader;
+class RAMSampleSource;
 
 class Speaker
 {
@@ -15,6 +16,7 @@ private:
     WAVFileReader *m_life;
     WAVFileReader *m_jokes[5];
     WAVFileReader *m_recording;
+    RAMSampleSource *m_ram_source;
 
     I2SOutput *m_i2s_output;
 
@@ -28,7 +30,7 @@ public:
     void playLightOff();
     void playRandomJoke();
     void playLife();
-    void playRecording(const char *file_path);
+    void playBuffer(int16_t *buffer, int total_samples);
 };
 
 #endif
